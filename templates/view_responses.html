@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inventory Audit - Trailer #{{ trailer.id }}</title>
+</head>
+<body>
+    <h2>Audit for Trailer #{{ trailer.id }} — {{ trailer.job_name }}</h2>
+    <a href="{{ url_for('inventory.dashboard') }}">Back to Dashboard</a>
+    <ul>
+        {% for r in responses %}
+            <li>
+                <strong>{{ r.item_name }} (#{{ r.item_number }})</strong> —
+                Status: {{ r.status }} |
+                Qty: {{ r.quantity }} |
+                Category: {{ r.category }}<br>
+                Notes: {{ r.note or 'N/A' }}<br>
+                Timestamp: {{ r.created_at.strftime('%Y-%m-%d %H:%M') }}
+                [<a href="{{ url_for('inventory.edit_response', response_id=r.id) }}">Edit</a>]
+            </li>
+            <hr>
+        {% endfor %}
+    </ul>
+</body>
+</html>

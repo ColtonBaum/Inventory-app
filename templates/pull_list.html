@@ -1,0 +1,110 @@
+<!-- templates/pull_list.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pull List – Trailer #{{ trailer.id }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .header {
+            margin-bottom: 16px;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 8px;
+        }
+        .header h2 { margin: 0 0 8px; }
+        .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 24px; }
+        .meta div { font-size: 14px; }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 12px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px 10px;
+            text-align: left;
+        }
+        th {
+            background: #f7f7f7;
+        }
+        .pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+        }
+        .muted { color: #666; font-size: 12px; }
+        .footer-note { margin-top: 12px; font-size: 12px; color: #666; }
+        .actions { margin-top: 16px; }
+        .actions a, .actions button {
+            margin-right: 8px;
+            padding: 8px 12px;
+            text-decoration: none;
+            background: #0d6efd;
+            color: white;
+            border-radius: 6px;
+            border: none;
+            display: inline-block;
+        }
+        .actions a.secondary, .actions button.secondary {
+            background: #6c757d;
+        }
+        @media print {
+            .actions { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Pull List <span class="pill">Trailer #{{ trailer.id }}</span></h2>
+        <div class="meta">
+            <div><strong>Job Name:</strong> {{ trailer.job_name }}</div>
+            <div><strong>Job Number:</strong> {{ trailer.job_number }}</div>
+            <div><strong>Location:</strong> {{ trailer.location }}</div>
+            <div><strong>Foreman:</strong> {{ trailer.foreman_name }}</div>
+            <div><strong>Tooling List:</strong> {{ trailer.tooling_list_name }}</div>
+            <div><strong>Assigned User:</strong> {{ trailer.assigned_user or '—' }}</div>
+            <!-- If you have an external trailer ID field on the model (e.g. tool_trailer_id),
+                 show it here; otherwise remove this line. -->
+            {% if trailer.tool_trailer_id %}
+                <div><strong>Tool Trailer ID:</strong> {{ trailer.tool_trailer_id }}</div>
+            {% elif trailer.trailer_id and trailer.trailer_id != trailer.id %}
+                <div><strong>Trailer ID (ext):</strong> {{ trailer.trailer_id }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if rows and rows|length %}
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40%;">Item Name</th>
+                    <th style="width: 20%;">Item #</th>
+                    <th style="width: 20%;">Missing Qty</th>
+                    <th style="width: 20%;">Red Tag Qty</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in rows %}
+                <tr>
+                    <td>{{ r.item_name }}</td>
+                    <td>{{ r.item_number }}</td>
+                    <td>{{ r.missing_qty or 0 }}</td>
+                    <td>{{ r.redtag_qty or 0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="footer-note">Only items marked Missing or Red Tag are shown.</div>
+    {% else %}
+        <p class="muted">No Missing or Red Tag items were reported on this submission.</p>
+    {% endif %}
+
+    <div class="actions">
+        <a href="{{ url_for('inventory.edit_submission', trailer_id=trailer.id) }}">Edit Submission</a>
+        <a class="secondary" href="{{ url_for('inventory.dashboard') }}">Back to Dashboard</a>
+        <button onclick="window.print()">Print</button>
+    </div>
+</body>
+</html>

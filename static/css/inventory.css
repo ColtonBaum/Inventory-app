@@ -1,0 +1,51 @@
+/* inventory_app/static/css/inventory.css */
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+h2 {
+    margin-bottom: 20px;
+}
+
+.accordion {
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+}
+
+.accordion h3 {
+    margin: 0;
+    padding: 10px;
+    background-color: #eee;
+    cursor: pointer;
+}
+
+.accordion-body {
+    padding: 10px;
+    display: none;
+}
+
+.item-block {
+    margin-bottom: 10px;
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.conditional-inputs {
+    margin-top: 10px;
+    padding-left: 10px;
+    border-left: 2px solid #f00;
+}
+
+.hidden {
+    display: none;
+}
+
+button[type="submit"],
+button[type="button"] {
+    margin-top: 10px;
+    padding: 8px 16px;
+    font-size: 16px;
+    cursor: pointer;
+}

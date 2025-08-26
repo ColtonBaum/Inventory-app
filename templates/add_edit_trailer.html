@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Trailer' if mode == 'Edit' else 'Assign a Trailer' }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h3 style="margin:0">{{ 'Edit Trailer' if mode == 'Edit' else 'Assign a Trailer' }}</h3>
+    <div class="actions-row">
+      <a href="{{ url_for('inventory.dashboard') }}" class="btn ghost small">Back to Dashboard</a>
+    </div>
+  </div>
+  <div class="card-body">
+    <form method="POST">
+      <!-- Meta fields -->
+      <div class="grid two" style="margin-bottom:14px;">
+        <div class="field">
+          <label for="job_name">Job Name</label>
+          <input class="input" type="text" id="job_name" name="job_name"
+                 value="{{ trailer.job_name if trailer else '' }}" required>
+        </div>
+
+        <div class="field">
+          <label for="job_number">Job Number</label>
+          <input class="input" type="text" id="job_number" name="job_number"
+                 value="{{ trailer.job_number if trailer else '' }}" required>
+        </div>
+
+        <div class="field">
+          <label for="location">Location</label>
+          <input class="input" type="text" id="location" name="location"
+                 value="{{ trailer.location if trailer else '' }}">
+        </div>
+
+        <div class="field">
+          <label for="inventory_type">Inventory Type</label>
+          <select id="inventory_type" name="inventory_type" required>
+            {% set itype = trailer.inventory_type if trailer else request.form.get('inventory_type','') %}
+            <option value="">-- Select --</option>
+            <option value="tools"   {% if itype=='tools' %}selected{% endif %}>Tools</option>
+            <option value="hardware"{% if itype=='hardware' %}selected{% endif %}>Hardware</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="assigned_user">Assigned User</label>
+          <input class="input" type="text" id="assigned_user" name="assigned_user"
+                 placeholder="Person responsible / submitter’s name"
+                 value="{{ trailer.assigned_user if trailer else '' }}">
+        </div>
+
+        <div class="field">
+          <label for="status">Status</label>
+          {% set st = trailer.status if trailer else request.form.get('status','Pending') %}
+          <select id="status" name="status" required>
+            <option value="Pending"     {% if st=='Pending' %}selected{% endif %}>Pending</option>
+            <option value="In Progress" {% if st=='In Progress' %}selected{% endif %}>In Progress</option>
+            <option value="Completed"   {% if st=='Completed' %}selected{% endif %}>Completed</option>
+            <option value="Needs Review"{% if st=='Needs Review' %}selected{% endif %}>Needs Review</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Extra Tooling repeater -->
+      <div class="card" style="border:1px dashed var(--border); margin-top:8px;">
+        <div class="card-header">
+          <strong>Extra Tooling</strong>
+          <button class="btn small primary" type="button" id="addRowBtn">Add Item</button>
+        </div>
+        <div class="card-body">
+          <div class="grid three" id="toolRows" style="row-gap:10px;">
+            {% set extra = trailer.extra_tooling if trailer and trailer.extra_tooling else [] %}
+            {% for t in extra %}
+              <div class="field">
+                <label>Item Name</label>
+                <input class="input" type="text" name="tool_name" value="{{ t.name if t.name is defined else t['name'] }}">
+              </div>
+              <div class="field">
+                <label>Item Number</label>
+                <input class="input" type="text" name="tool_number" value="{{ t.number if t.number is defined else t['number'] }}">
+              </div>
+              <div class="field">
+                <label>Quantity</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <input class="input" type="number" name="tool_qty" min="0"
+                         value="{{ t.quantity if t.quantity is defined else t['quantity'] }}">
+                  <button class="btn small ghost removeRowBtn" type="button">Remove</button>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if not extra %}
+          <!-- one empty row to start -->
+          <div class="grid three" style="row-gap:10px;" id="toolRowTemplate" hidden>
+            <div class="field">
+              <label>Item Name</label>
+              <input class="input" type="text" name="tool_name" placeholder="e.g., 4-1/2&quot; Angle Grinder">
+            </div>
+            <div class="field">
+              <label>Item Number</label>
+              <input class="input" type="text" name="tool_number" placeholder="e.g., PT DWE402">
+            </div>
+            <div class="field">
+              <label>Quantity</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input class="input" type="number" name="tool_qty" min="0" value="1">
+                <button class="btn small ghost removeRowBtn" type="button">Remove</button>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button class="btn success" type="submit">{{ 'Save Changes' if mode == 'Edit' else 'Create Trailer' }}</button>
+        <a class="btn ghost" href="{{ url_for('inventory.dashboard') }}">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  (function(){
+    const container = document.getElementById('toolRows');
+    const addBtn = document.getElementById('addRowBtn');
+
+    // If there were no existing rows rendered from server, generate an initial row from template
+    const template = document.getElementById('toolRowTemplate');
+    if (template && container && container.children.length === 0) {
+      container.appendChild(cloneTemplate(template));
+    }
+
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        if (template) container.appendChild(cloneTemplate(template));
+        else container.appendChild(makeBlankRow());
+      });
+    }
+
+    // Delegate remove actions
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.removeRowBtn');
+      if (!btn) return;
+      const field = btn.closest('.grid.three') || btn.closest('.field')?.parentElement;
+      // We structured rows as three .field blocks inside grid.three; remove those three.
+      const row = btn.closest('.field')?.parentElement;
+      if (row && row.classList.contains('grid') && row.classList.contains('three')) {
+        row.remove();
+      } else {
+        // fallback: remove only the three siblings if individually placed
+        const nameField = btn.closest('.field')?.previousElementSibling?.previousElementSibling;
+        const numberField = btn.closest('.field')?.previousElementSibling;
+        btn.closest('.field')?.remove();
+        numberField?.remove();
+        nameField?.remove();
+      }
+    });
+
+    function cloneTemplate(tpl){
+      const clone = tpl.cloneNode(true);
+      clone.id = '';
+      clone.hidden = false;
+      // ensure name attributes are arrays for Flask .getlist() (already correct: tool_name, tool_number, tool_qty)
+      return clone;
+    }
+
+    function makeBlankRow(){
+      // Fallback if template is missing
+      const row = document.createElement('div');
+      row.className = 'grid three';
+      row.style.rowGap = '10px';
+      row.innerHTML = `
+        <div class="field">
+          <label>Item Name</label>
+          <input class="input" type="text" name="tool_name" placeholder="e.g., 4-1/2&quot; Angle Grinder">
+        </div>
+        <div class="field">
+          <label>Item Number</label>
+          <input class="input" type="text" name="tool_number" placeholder="e.g., PT DWE402">
+        </div>
+        <div class="field">
+          <label>Quantity</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input class="input" type="number" name="tool_qty" min="0" value="1">
+            <button class="btn small ghost removeRowBtn" type="button">Remove</button>
+          </div>
+        </div>
+      `;
+      return row;
+    }
+  })();
+</script>
+{% endblock %}

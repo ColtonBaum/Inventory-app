@@ -1,0 +1,71 @@
+<!-- inventory_app/templates/trailer_invoices.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Trailer #{{ trailer.id }} — Invoices</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .tabs { margin-bottom: 20px; border-bottom: 2px solid #ccc; display: flex; gap: 10px; }
+        .tab {
+            padding: 10px 20px; text-decoration: none; border: 1px solid #ccc; border-bottom: none;
+            background-color: #f1f1f1; border-top-left-radius: 6px; border-top-right-radius: 6px; color: black;
+        }
+        .tab:hover { background-color: #ddd; }
+        .tab.active { background-color: white; border-bottom: 2px solid white; font-weight: bold; }
+
+        .box { background: #fafafa; border: 1px solid #eee; padding: 12px; margin-bottom: 16px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f7f7f7; }
+        .muted { color: #666; font-style: italic; }
+    </style>
+</head>
+<body>
+    <h2>Invoices for Trailer #{{ trailer.id }}</h2>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <a href="{{ url_for('inventory.dashboard') }}"
+           class="tab {% if request.endpoint == 'inventory.dashboard' %}active{% endif %}">🏠 Dashboard</a>
+        <a href="{{ url_for('inventory.view_invoices') }}"
+           class="tab {% if request.endpoint == 'inventory.view_invoices' %}active{% endif %}">📄 Invoices</a>
+    </div>
+
+    <div class="box">
+        <strong>Job:</strong> {{ trailer.job_name or '—' }}
+        {% if trailer.job_number %} ({{ trailer.job_number }}){% endif %}<br>
+        <strong>Location:</strong> {{ trailer.location or '—' }}<br>
+        <strong>Assigned User:</strong> {{ trailer.assigned_user or 'Unassigned' }}<br>
+        <strong>Status:</strong> {{ trailer.status }}
+    </div>
+
+    {% if not invoices %}
+        <p class="muted">No invoices for this trailer yet.</p>
+    {% else %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Created</th>
+                    <th>File</th>
+                    <th>Download</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for inv in invoices %}
+                <tr>
+                    <td>{{ inv.created_at.strftime('%Y-%m-%d %H:%M') if inv.created_at else '' }}</td>
+                    <td>{{ inv.file_path or '—' }}</td>
+                    <td>
+                        {% if inv.file_path %}
+                            <a href="{{ url_for('inventory.download_invoice', invoice_id=inv.id) }}">Download</a>
+                        {% else %}
+                            <span class="muted">No file</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+</body>
+</html>

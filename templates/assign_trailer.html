@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Assign Trailer{% endblock %}
+
+{% block head_extra %}
+<style>
+  .wrap { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:16px; }
+  .wrap h2 { margin:0 0 12px; color:#111827; }
+  .grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:16px; }
+  @media (max-width:820px){ .grid { grid-template-columns:1fr; } }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .field label { font-size:13px; color:#374151; }
+  .input, select { padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; }
+  .btn { appearance:none; border:none; border-radius:8px; padding:10px 14px; background:#2563eb; color:#fff; cursor:pointer; }
+  .btn:hover { background:#1d4ed8; }
+  .btn.muted { background:#6b7280; }
+  .hint { color:#6b7280; font-size:12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wrap">
+  <h2>Assign Trailer</h2>
+  <form method="POST" action="">
+    <div class="grid">
+      <div class="field">
+        <label>Trailer ID *</label>
+        <input class="input" type="text" name="trailer_id" placeholder="e.g., T-1001" required>
+        <div class="hint">External trailer identifier used in the field.</div>
+      </div>
+
+      <div class="field">
+        <label>Job Name *</label>
+        <input class="input" type="text" name="job_name" required>
+      </div>
+
+      <div class="field">
+        <label>Job Number *</label>
+        <input class="input" type="text" name="job_number" required>
+      </div>
+
+<input type="hidden" name="location" value="">
+
+      <div class="field">
+        <label>Tooling List *</label>
+        <!-- IMPORTANT: name must match backend -> tooling_list_name -->
+        <select name="tooling_list_name" class="input" required id="tooling_list_name">
+          <option value="" disabled selected>Select a list</option>
+          <option value="Standard Trailer">Standard Trailer</option>
+          <option value="Gang Box">Gang Box</option>
+          <option value="Semi Trailer">Semi Trailer</option>
+          <option value="Utility Trailer">Utility Trailer</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Assigned User (optional)</label>
+        <input class="input" type="text" name="assigned_user" placeholder="Person responsible">
+      </div>
+    </div>
+
+    <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="btn" type="submit">Assign Trailer</button>
+      <a class="btn muted" href="{{ url_for('inventory.dashboard') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

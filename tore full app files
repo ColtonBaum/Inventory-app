@@ -1,0 +1,115 @@
+[33mcommit 566fb1f65da73545c0142b3751f71396b1a8d8e5[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Author: Colton Baum <coltonbaum12@gmail.com>
+Date:   Tue Aug 26 15:49:45 2025 -0600
+
+    Initial commit
+
+ LICENSE                                            |     29 [32m+[m
+ README.rst                                         |     33 [32m+[m
+ __pycache__/app.cpython-311.pyc                    |    Bin [31m0[m -> [32m936[m bytes
+ __pycache__/config.cpython-311.pyc                 |    Bin [31m0[m -> [32m1058[m bytes
+ __pycache__/database.cpython-311.pyc               |    Bin [31m0[m -> [32m883[m bytes
+ __pycache__/models.cpython-311.pyc                 |    Bin [31m0[m -> [32m4849[m bytes
+ app.py                                             |     21 [32m+[m
+ config.py                                          |      9 [32m+[m
+ database.py                                        |     10 [32m+[m
+ dist/weasyprint.exe                                |    Bin [31m0[m -> [32m28916351[m bytes
+ instance/trailers.db                               |    Bin [31m0[m -> [32m16384[m bytes
+ js/inventory.js                                    |     31 [32m+[m
+ models.py                                          |     82 [32m+[m
+ requirements.txt                                   |    Bin [31m0[m -> [32m2470[m bytes
+ routes/__pycache__/inventory.cpython-311.pyc       |    Bin [31m0[m -> [32m25463[m bytes
+ .../__pycache__/trailer_assignment.cpython-311.pyc |    Bin [31m0[m -> [32m5123[m bytes
+ routes/inventory.py                                |    445 [32m+[m
+ routes/trailer_assignment.py                       |     71 [32m+[m
+ static/css/inventory.css                           |     51 [32m+[m
+ templates/add_edit_trailer.html                    |    197 [32m+[m
+ templates/assign_trailer.html                      |     67 [32m+[m
+ templates/base.html                                |    164 [32m+[m
+ templates/dashboard.html                           |    122 [32m+[m
+ templates/edit_response.html                       |     29 [32m+[m
+ templates/inventory.html                           |     77 [32m+[m
+ templates/inventory_form.html                      |    367 [32m+[m
+ templates/invoice_template.html                    |     34 [32m+[m
+ templates/invoices.html                            |     91 [32m+[m
+ templates/pull_list.html                           |    110 [32m+[m
+ templates/trailer_invoices.html                    |     71 [32m+[m
+ templates/view_invoices.html                       |     21 [32m+[m
+ templates/view_responses.html                      |     24 [32m+[m
+ utils/__init__.py                                  |      0
+ utils/__pycache__/__init__.cpython-311.pyc         |    Bin [31m0[m -> [32m143[m bytes
+ utils/__pycache__/excel_parser.cpython-311.pyc     |    Bin [31m0[m -> [32m1125[m bytes
+ .../__pycache__/invoice_generator.cpython-311.pyc  |    Bin [31m0[m -> [32m1711[m bytes
+ utils/__pycache__/tooling_lists.cpython-311.pyc    |    Bin [31m0[m -> [32m51294[m bytes
+ utils/invoice_generator.py                         |     26 [32m+[m
+ utils/tooling_lists.py                             |    462 [32m+[m
+ venv/Include/site/python3.11/greenlet/greenlet.h   |    164 [32m+[m
+ .../site-packages/Brotli-1.1.0.dist-info/INSTALLER |      1 [32m+[m
+ .../site-packages/Brotli-1.1.0.dist-info/LICENSE   |     19 [32m+[m
+ .../site-packages/Brotli-1.1.0.dist-info/METADATA  |    131 [32m+[m
+ .../site-packages/Brotli-1.1.0.dist-info/RECORD    |      9 [32m+[m
+ .../Lib/site-packages/Brotli-1.1.0.dist-info/WHEEL |      5 [32m+[m
+ .../Brotli-1.1.0.dist-info/top_level.txt           |      2 [32m+[m
+ .../MarkupSafe-3.0.2.dist-info/INSTALLER           |      1 [32m+[m
+ .../MarkupSafe-3.0.2.dist-info/LICENSE.txt         |     28 [32m+[m
+ .../MarkupSafe-3.0.2.dist-info/METADATA            |     92 [32m+[m
+ .../MarkupSafe-3.0.2.dist-info/RECORD              |     14 [32m+[m
+ .../site-packages/MarkupSafe-3.0.2.dist-info/WHEEL |      5 [32m+[m
+ .../MarkupSafe-3.0.2.dist-info/top_level.txt       |      1 [32m+[m
+ venv/Lib/site-packages/PIL/AvifImagePlugin.py      |    291 [32m+[m
+ venv/Lib/site-packages/PIL/BdfFontFile.py          |    122 [32m+[m
+ venv/Lib/site-packages/PIL/BlpImagePlugin.py       |    497 [32m+[m
+ venv/Lib/site-packages/PIL/BmpImagePlugin.py       |    515 [32m+[m
+ venv/Lib/site-packages/PIL/BufrStubImagePlugin.py  |     75 [32m+[m
+ venv/Lib/site-packages/PIL/ContainerIO.py          |    173 [32m+[m
+ venv/Lib/site-packages/PIL/CurImagePlugin.py       |     75 [32m+[m
+ venv/Lib/site-packages/PIL/DcxImagePlugin.py       |     83 [32m+[m
+ venv/Lib/site-packages/PIL/DdsImagePlugin.py       |    624 [32m+[m
+ venv/Lib/site-packages/PIL/EpsImagePlugin.py       |    476 [32m+[m
+ venv/Lib/site-packages/PIL/ExifTags.py             |    382 [32m+[m
+ venv/Lib/site-packages/PIL/FitsImagePlugin.py      |    152 [32m+[m
+ venv/Lib/site-packages/PIL/FliImagePlugin.py       |    178 [32m+[m
+ venv/Lib/site-packages/PIL/FontFile.py             |    134 [32m+[m
+ venv/Lib/site-packages/PIL/FpxImagePlugin.py       |    257 [32m+[m
+ venv/Lib/site-packages/PIL/FtexImagePlugin.py      |    114 [32m+[m
+ venv/Lib/site-packages/PIL/GbrImagePlugin.py       |    103 [32m+[m
+ venv/Lib/site-packages/PIL/GdImageFile.py          |    102 [32m+[m
+ venv/Lib/site-packages/PIL/GifImagePlugin.py       |   1213 [32m+[m
+ venv/Lib/site-packages/PIL/GimpGradientFile.py     |    149 [32m+[m
+ venv/Lib/site-packages/PIL/GimpPaletteFile.py      |     72 [32m+[m
+ venv/Lib/site-packages/PIL/GribStubImagePlugin.py  |     75 [32m+[m
+ venv/Lib/site-packages/PIL/Hdf5StubImagePlugin.py  |     75 [32m+[m
+ venv/Lib/site-packages/PIL/IcnsImagePlugin.py      |    411 [32m+[m
+ venv/Lib/site-packages/PIL/IcoImagePlugin.py       |    381 [32m+[m
+ venv/Lib/site-packages/PIL/ImImagePlugin.py        |    389 [32m+[m
+ venv/Lib/site-packages/PIL/Image.py                |   4245 [32m+[m
+ venv/Lib/site-packages/PIL/ImageChops.py           |    311 [32m+[m
+ venv/Lib/site-packages/PIL/ImageCms.py             |   1123 [32m+[m
+ venv/Lib/site-packages/PIL/ImageColor.py           |    320 [32m+[m
+ venv/Lib/site-packages/PIL/ImageDraw.py            |   1232 [32m+[m
+ venv/Lib/site-packages/PIL/ImageDraw2.py           |    243 [32m+[m
+ venv/Lib/site-packages/PIL/ImageEnhance.py         |    113 [32m+[m
+ venv/Lib/site-packages/PIL/ImageFile.py            |    922 [32m+[m
+ venv/Lib/site-packages/PIL/ImageFilter.py          |    604 [32m+[m
+ venv/Lib/site-packages/PIL/ImageFont.py            |   1339 [32m+[m
+ venv/Lib/site-packages/PIL/ImageGrab.py            |    196 [32m+[m
+ venv/Lib/site-packages/PIL/ImageMath.py            |    368 [32m+[m
+ venv/Lib/site-packages/PIL/ImageMode.py            |     92 [32m+[m
+ venv/Lib/site-packages/PIL/ImageMorph.py           |    265 [32m+[m
+ venv/Lib/site-packages/PIL/ImageOps.py             |    745 [32m+[m
+ venv/Lib/site-packages/PIL/ImagePalette.py         |    286 [32m+[m
+ venv/Lib/site-packages/PIL/ImagePath.py            |     20 [32m+[m
+ venv/Lib/site-packages/PIL/ImageQt.py              |    220 [32m+[m
+ venv/Lib/site-packages/PIL/ImageSequence.py        |     86 [32m+[m
+ venv/Lib/site-packages/PIL/ImageShow.py            |    362 [32m+[m
+ venv/Lib/site-packages/PIL/ImageStat.py            |    160 [32m+[m
+ venv/Lib/site-packages/PIL/ImageTk.py              |    266 [32m+[m
+ venv/Lib/site-packages/PIL/ImageTransform.py       |    136 [32m+[m
+ venv/Lib/site-packages/PIL/ImageWin.py             |    247 [32m+[m
+ venv/Lib/site-packages/PIL/ImtImagePlugin.py       |    103 [32m+[m
+ venv/Lib/site-packages/PIL/IptcImagePlugin.py      |    250 [32m+[m
+ venv/Lib/site-packages/PIL/Jpeg2KImagePlugin.py    |    442 [32m+[m
+ venv/Lib/site-packages/PIL/JpegImagePlugin.py      |    902 [32m+[m
+ venv/Lib/site-packages/PIL/JpegPresets.py          |    242 [32m+[m
+ venv/Lib/site-packages/PIL/McIdasImagePlugin.py    |     78 [32m+[m
+ venv/Lib/site-packages/

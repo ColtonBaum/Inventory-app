@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Inventory for Trailer #{{ trailer.id }}</title>
+    <style>
+        .accordion { margin: 10px 0; }
+        .item-group { margin-left: 20px; margin-bottom: 15px; }
+        .item-detail { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
+        .item-detail input[type="text"],
+        .item-detail input[type="number"],
+        .item-detail select { padding: 4px; }
+    </style>
+</head>
+<body>
+    <h2>Inventory Form for Trailer #{{ trailer.id }}</h2>
+
+    <!-- Job Info -->
+    <div>
+        <p><strong>Job Name:</strong> {{ trailer.job_name }}</p>
+        <p><strong>Job Number:</strong> {{ trailer.job_number }}</p>
+        <p><strong>Location:</strong> {{ trailer.location }}</p>
+        <p><strong>Foreman:</strong> {{ trailer.foreman_name }}</p>
+    </div>
+
+    <form method="POST">
+        <!-- Tooling Items -->
+        <h3>Tooling List</h3>
+        {% for item in inventory_data %}
+            <div class="item-detail">
+                <span>
+                    {{ item.itemName }} (#{{ item.itemNumber }}) — Expected: {{ item.quantity }}
+                </span>
+                <label>Status:
+                    <select name="{{ item.itemNumber }}_status" required>
+                        <option value="">-- Select --</option>
+                        <option value="Complete">Complete</option>
+                        <option value="Missing">Missing</option>
+                        <option value="Red Tag">Red Tag</option>
+                    </select>
+                </label>
+                <label>Qty:
+                    <input type="number" name="{{ item.itemNumber }}_quantity" min="0" value="{{ item.quantity }}">
+                </label>
+                <label>Note:
+                    <input type="text" name="{{ item.itemNumber }}_note">
+                </label>
+            </div>
+        {% endfor %}
+
+        <!-- Extra Tooling Credit-Back Section -->
+        {% if trailer.extra_tooling %}
+            <h3>Extra Tooling</h3>
+            {% for item in trailer.extra_tooling %}
+                <div class="item-detail">
+                    <span>{{ item.name }} (#{{ item.number }}) — Expected: {{ item.quantity }}</span>
+                    <label>Status:
+                        <select name="extra_{{ loop.index }}_status" required>
+                            <option value="">-- Select --</option>
+                            <option value="Returned">Returned</option>
+                            <option value="Not Returned">Not Returned</option>
+                        </select>
+                    </label>
+                    <label>Qty Returned:
+                        <input type="number" name="extra_{{ loop.index }}_quantity" min="0" value="{{ item.quantity }}">
+                    </label>
+                    <label>Note:
+                        <input type="text" name="extra_{{ loop.index }}_note">
+                    </label>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <br>
+        <button type="submit">Submit Inventory</button>
+    </form>
+</body>
+</html>

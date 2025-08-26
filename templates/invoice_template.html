@@ -1,0 +1,34 @@
+<!-- inventory_app/templates/invoice_template.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Invoice - Trailer {{ trailer_id }}</title>
+</head>
+<body>
+    <h2>Invoice for Trailer #{{ trailer_id }}</h2>
+    <p>Date: {{ date }}</p>
+    <table border="1" cellpadding="8" cellspacing="0">
+        <thead>
+            <tr>
+                <th>Item #</th>
+                <th>Item Name</th>
+                <th>Status</th>
+                <th>Quantity</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.item_number }}</td>
+                <td>{{ item.item_name }}</td>
+                <td>{{ item.status }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ item.note or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

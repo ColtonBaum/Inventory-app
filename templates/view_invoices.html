@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Invoices for Trailer #{{ trailer.id }}</title>
+</head>
+<body>
+    <h2>Invoices for Trailer #{{ trailer.id }} — {{ trailer.job_name }}</h2>
+    <a href="{{ url_for('inventory.dashboard') }}">Back to Dashboard</a>
+    <ul>
+        {% for invoice in invoices %}
+            <li>
+                <a href="{{ url_for('static', filename=invoice.file_path) }}" target="_blank">
+                    View Invoice ({{ invoice.file_path.split('/')[-1] }})
+                </a>
+            </li>
+        {% else %}
+            <li>No invoices available.</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>

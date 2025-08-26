@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Edit Inventory Response</title>
+</head>
+<body>
+    <h2>Edit Inventory Entry for {{ response.item_name }} (#{{ response.item_number }})</h2>
+    <form method="POST">
+        <label>Status:
+            <select name="status">
+                <option value="Complete" {% if response.status == 'Complete' %}selected{% endif %}>Complete</option>
+                <option value="Missing" {% if response.status == 'Missing' %}selected{% endif %}>Missing</option>
+                <option value="Red Tag" {% if response.status == 'Red Tag' %}selected{% endif %}>Red Tag</option>
+                <option value="Not Returned" {% if response.status == 'Not Returned' %}selected{% endif %}>Not Returned</option>
+            </select>
+        </label><br><br>
+
+        <label>Quantity:
+            <input type="number" name="quantity" value="{{ response.quantity }}">
+        </label><br><br>
+
+        <label>Note:<br>
+            <textarea name="note">{{ response.note }}</textarea>
+        </label><br><br>
+
+        <button type="submit">Update</button>
+    </form>
+</body>
+</html>

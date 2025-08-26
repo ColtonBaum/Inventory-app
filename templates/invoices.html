@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Invoices{% endblock %}
+
+{% block head_extra %}
+<style>
+  .wrap { background:#fff; border:1px solid #e5e7eb; border-radius:12px; }
+  .hd { padding:16px 18px; border-bottom:1px solid #e5e7eb; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; }
+  .hd h2 { margin:0; font-size:18px; color:#111827; }
+
+  .search { display:flex; gap:8px; align-items:center; width:100%; max-width:520px; }
+  .search input[type="text"]{
+    flex:1; padding:12px 14px; border:1px solid #d1d5db; border-radius:10px; font-size:16px;
+  }
+  .btn { appearance:none; border:none; border-radius:10px; padding:12px 16px; background:#2563eb; color:#fff; cursor:pointer; font-size:16px; }
+  .btn:hover { background:#1d4ed8; }
+  .btn.ghost { background:#fff; color:#111827; border:1px solid #d1d5db; }
+
+  .bd { padding:16px 18px; }
+
+  /* Table */
+  .table-wrap { overflow:auto; }
+  table { width:100%; border-collapse:collapse; min-width: 820px; font-size:16px; }
+  th, td { border-bottom:1px solid #e5e7eb; padding:12px 10px; text-align:left; }
+  th { background:#f9fafb; font-weight:600; color:#374151; position:sticky; top:0; }
+  tbody tr:hover { background:#f9fafb; }
+
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#f3f4f6; border:1px solid #e5e7eb; font-size:12px; color:#374151; }
+
+  .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .btn-sm { padding:10px 12px; font-size:15px; border-radius:8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wrap">
+  <div class="hd">
+    <h2>Invoices</h2>
+    <form class="search" method="GET" action="{{ url_for('inventory.view_invoices') }}">
+      <input type="text" name="q" placeholder="Search by job name, job #, location, trailer ID, assignee…" value="{{ q or '' }}">
+      <button class="btn" type="submit">Search</button>
+      {% if q %}
+        <a class="btn ghost" href="{{ url_for('inventory.view_invoices') }}">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="bd">
+    {% if invoices %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 14%;">Created</th>
+              <th style="width: 10%;">Trailer #</th>
+              <th style="width: 18%;">Job Name</th>
+              <th style="width: 14%;">Job #</th>
+              <th style="width: 16%;">Location</th>
+              <th style="width: 12%;">Assignee</th>
+              <th style="width: 16%;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in invoices %}
+              {% set t = trailers.get(inv.trailer_id) %}
+              <tr>
+                <td>{{ inv.created_at.strftime('%Y-%m-%d %H:%M') if inv.created_at else '—' }}</td>
+                <td><span class="pill">#{{ inv.trailer_id }}</span></td>
+                <td>{{ t.job_name if t else '—' }}</td>
+                <td>{{ t.job_number if t else '—' }}</td>
+                <td>{{ t.location if t else '—' }}</td>
+                <td>{{ t.assigned_user if t and t.assigned_user else '—' }}</td>
+                <td>
+                  <div class="actions">
+                    <a class="btn btn-sm" href="{{ url_for('inventory.pull_list', trailer_id=inv.trailer_id) }}">View Invoice</a>
+                    {# If you still want downloadable PDF when present, keep this next button; else remove it. #}
+                    {% if inv.file_path %}
+                      <a class="btn ghost btn-sm" href="{{ url_for('inventory.download_invoice', invoice_id=inv.id) }}">Download File</a>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p style="color:#6b7280; margin:0;">No invoices found{% if q %} matching “{{ q }}”{% endif %}.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

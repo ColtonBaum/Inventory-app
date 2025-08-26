@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block head_extra %}
+<style>
+  /* Make table a bit larger and more readable */
+  table { font-size: 15px; }
+  th, td { vertical-align: middle; }
+
+  /* Actions row: prevent overlap & allow wrap on smaller screens */
+  .actions-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .w-actions { width: 360px; } /* give actions more breathing room */
+  @media (max-width: 1024px) { .w-actions { width: 100%; } }
+
+  /* Small buttons spacing inside table */
+  .btn.small { padding: 6px 10px; font-size: 13px; }
+
+  /* Filter grid spacing */
+  .filters .field input, .filters .field select { width: 100%; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <strong>Trailer Inventory Dashboard</strong>
+    <a class="btn small primary" href="{{ url_for('trailer_assignment.assign_trailer') }}">Assign a Trailer</a>
+  </div>
+  <div class="card-body">
+
+    <!-- Filters -->
+    <form method="GET" class="grid two filters" style="margin-bottom:14px;">
+      <div class="field">
+        <label>Job Name</label>
+        <input type="text" name="job_name" value="{{ request.args.get('job_name', '') }}">
+      </div>
+      <div class="field">
+        <label>Job Number</label>
+        <input type="text" name="job_number" value="{{ request.args.get('job_number', '') }}">
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <select name="status">
+          <option value="">All</option>
+          <option value="Pending"     {% if request.args.get('status') == 'Pending' %}selected{% endif %}>Pending</option>
+          <option value="In Progress" {% if request.args.get('status') == 'In Progress' %}selected{% endif %}>In Progress</option>
+          <option value="Needs Review"{% if request.args.get('status') == 'Needs Review' %}selected{% endif %}>Needs Review</option>
+          <!-- Completed are typically excluded from the dashboard; they appear in Invoices tab -->
+        </select>
+      </div>
+      <div class="field">
+        <label>Tooling List</label>
+        <select name="tooling_list_name">
+          <option value="">All</option>
+          <option value="Standard Trailer" {% if request.args.get('tooling_list_name') == 'Standard Trailer' %}selected{% endif %}>Standard Trailer</option>
+          <option value="Gang Box"         {% if request.args.get('tooling_list_name') == 'Gang Box' %}selected{% endif %}>Gang Box</option>
+          <option value="Semi Trailer"     {% if request.args.get('tooling_list_name') == 'Semi Trailer' %}selected{% endif %}>Semi Trailer</option>
+          <option value="Utility Trailer"  {% if request.args.get('tooling_list_name') == 'Utility Trailer' %}selected{% endif %}>Utility Trailer</option>
+        </select>
+      </div>
+      <div style="align-self:end;">
+        <button class="btn small primary" type="submit">Filter</button>
+      </div>
+    </form>
+
+    <!-- Table -->
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Trailer ID</th>
+          <th>Job Name</th>
+          <th>Job Number</th>
+          <th>Tooling List</th>
+          <th>Status</th>
+          <th>Assigned User</th>
+          <th class="w-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for trailer in trailers %}
+        <tr>
+          <td>{{ trailer.id }}</td>
+          <td>{{ trailer.trailer_id or '—' }}</td>
+          <td>{{ trailer.job_name }}</td>
+          <td>{{ trailer.job_number }}</td>
+          <td>{{ trailer.tooling_list_name or '—' }}</td>
+          <td>{{ trailer.status }}</td>
+          <td>{{ trailer.assigned_user or 'Unassigned' }}</td>
+          <td>
+            <div class="actions-row">
+              {% if trailer.status == 'Pending' %}
+                <a class="btn small primary" href="{{ url_for('inventory.inventory_form', trailer_id=trailer.id) }}">Start Inventory</a>
+              {% elif trailer.status == 'In Progress' %}
+                <a class="btn small primary" href="{{ url_for('inventory.inventory_form', trailer_id=trailer.id) }}">Resume Inventory</a>
+              {% else %}
+                <!-- Typically Completed trailers are not shown on dashboard -->
+                <a class="btn small ghost" href="{{ url_for('inventory.view_form', trailer_id=trailer.id) }}">View Form</a>
+                <a class="btn small primary" href="{{ url_for('inventory.edit_submission', trailer_id=trailer.id) }}">Edit Submission</a>
+              {% endif %}
+
+              <form method="POST"
+                    action="{{ url_for('inventory.delete_trailer', trailer_id=trailer.id) }}"
+                    onsubmit="return confirm('Delete this trailer?');"
+                    style="display:inline;">
+                <button class="btn small danger" type="submit">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+  </div>
+</div>
+{% endblock %}
