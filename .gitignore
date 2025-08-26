@@ -1,40 +1,84 @@
-# Python cache
+# ---- Python Defaults ----
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
 
-# Virtual environment
-venv/
-.env/
-.venv/
+# C extensions
+*.so
 
-# Environment variables
-*.env
-*.env.*
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# SQLite database files (if you don’t want to commit local test data)
-*.db
-*.sqlite3
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
 
-# Flask / Alembic migrations
-migrations/versions/*
-!migrations/README
-!migrations/env.py
-!migrations/script.py.mako
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
 
-# Logs
-*.log
+# Translations
+*.mo
+*.pot
 
-# OS files
-.DS_Store
-Thumbs.db
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
 
-# VSCode / IDE settings
+# IDEs / Editors
 .vscode/
 .idea/
 *.swp
+*.swo
 
-# Reports / invoices (generated files)
+# Virtual environments
+env/
+venv/
+ENV/
+.venv/
+
+# ---- Flask / Project Specific ----
+# SQLite database files
+*.db
+instance/
+
+# Secret config
+*.env
+.env.*
+
+# Logs
+*.log
+logs/
+
+# Invoices and generated files
 invoices/
 *.pdf
+
+# Static build artifacts
+static/build/
+static/node_modules/
+
