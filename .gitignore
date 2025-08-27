@@ -1,84 +1,10 @@
-# ---- Python Defaults ----
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
-
-# Translations
-*.mo
-*.pot
-
-# Jupyter Notebook checkpoints
-.ipynb_checkpoints
-
-# IDEs / Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Virtual environments
-env/
 venv/
-ENV/
-.venv/
-
-# ---- Flask / Project Specific ----
-# SQLite database files
-*.db
-instance/
-
-# Secret config
-*.env
-.env.*
-
-# Logs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 *.log
-logs/
-
-# Invoices and generated files
-invoices/
-*.pdf
-
-# Static build artifacts
-static/build/
-static/node_modules/
-
+.env
+.env.*
+instance/
+.DS_Store
