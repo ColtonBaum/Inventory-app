@@ -4,38 +4,30 @@
 {% block head_extra %}
 <style>
   :root{
-    --fg:#111827;           /* text color */
-    --muted:#6b7280;        /* muted text */
-    --border:#e5e7eb;       /* borders */
-    --bg:#ffffff;           /* panels */
-    --bg-soft:#f9fafb;      /* soft rows */
-    --primary:#2563eb;      /* buttons */
+    --fg:#111827;
+    --muted:#6b7280;
+    --border:#e5e7eb;
+    --bg:#ffffff;
+    --bg-soft:#f9fafb;
+    --primary:#2563eb;
     --primary-hover:#1d4ed8;
     --danger:#ef4444;
   }
-
-  /* Base / mobile-friendly sizes (≥16px to avoid iOS zoom) */
   .wrap { background:var(--bg); border:1px solid var(--border); border-radius:12px; }
   .wrap .hd { padding:16px 18px; border-bottom:1px solid var(--border); }
-  .wrap .bd { padding:12px 12px 90px; } /* extra bottom space for sticky action bar */
-
+  .wrap .bd { padding:12px 12px 90px; }
   .hd h2 { margin:0; font-size:18px; color:var(--fg); }
-
   .meta { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:8px 20px; margin:6px 0 0; }
   .meta div { color:var(--fg); font-size:15px; }
   @media (max-width:900px){ .meta { grid-template-columns:1fr; } }
-
   .muted { color:var(--muted); }
-
-  /* Accordion */
   .accordion { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
   .acc-item + .acc-item { border-top:1px solid var(--border); }
   .acc-header{
     width:100%; background:var(--bg-soft); padding:14px;
     display:flex; align-items:center; justify-content:space-between;
     border:none; cursor:pointer; text-align:left;
-    font-size:16px;
-    -webkit-tap-highlight-color: transparent;
+    font-size:16px; -webkit-tap-highlight-color: transparent;
   }
   .acc-title { font-weight:600; color:var(--fg); display:flex; align-items:center; gap:8px; }
   .acc-title .caret { display:inline-block; transition:transform .2s ease; }
@@ -43,54 +35,39 @@
   .acc-count { color:var(--muted); font-size:14px }
   .acc-body { display:none; background:#fff; }
   .acc-item.open .acc-body { display:block; }
-
-  /* Item blocks (stacked vertically) */
   .item { padding:14px; border-top:1px dashed var(--border); }
   .item:first-child { border-top:none; }
-
   .row1 { display:grid; gap:10px; grid-template-columns:1fr; }
   .label { font-size:13px; color:var(--muted); margin-bottom:4px; }
   .val { font-size:16px; color:var(--fg); }
-
   .qty input[type="number"]{
     width:180px; max-width:100%;
     padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg-soft);
-    font-size:16px;  /* prevents iOS zoom */
+    font-size:16px;
   }
-
-  /* Controls (Missing, Red Tag, Complete) stacked vertically */
-  .row2 {
-    display:flex; flex-direction:column; gap:12px; margin-top:12px;
-  }
+  .row2 { display:flex; flex-direction:column; gap:12px; margin-top:12px; }
   .chk {
     display:flex; align-items:center; gap:10px; font-size:16px; color:var(--fg);
     padding:8px 0;
   }
-  /* Big, tap-friendly checkboxes */
   .chk input[type="checkbox"]{
     width:22px; height:22px; min-width:22px; min-height:22px;
     accent-color: var(--primary);
   }
-
   .note { display:none; margin-left:32px; }
   .note textarea {
     width:100%; min-height:72px; margin-top:6px; padding:12px 14px;
     border:1px solid var(--border); border-radius:10px; font-size:16px; resize:vertical;
   }
-
-  /* Top controls */
   .controls-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:16px 0 8px; }
   .controls-top h3 { margin:0; color:var(--fg); font-size:18px; }
   .btn { appearance:none; border:none; border-radius:10px; padding:12px 16px; background:var(--primary); color:#fff; cursor:pointer; font-size:16px; }
   .btn:hover { background:var(--primary-hover); }
   .btn.ghost { background:#fff; color:var(--fg); border:1px solid var(--border); }
   .btn.muted { background:#6b7280; }
-
   .name-field { margin:12px 0 6px; }
   .name-field input { width:320px; max-width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:10px; font-size:16px; }
   .hint { color:var(--muted); font-size:13px; margin-top:4px; }
-
-  /* Sticky mobile action bar */
   .actions-sticky{
     position:sticky; bottom:0; left:0; right:0;
     background:#fff; border-top:1px solid var(--border);
@@ -98,10 +75,7 @@
     z-index:10; border-bottom-left-radius:12px; border-bottom-right-radius:12px;
   }
   .actions-sticky .btn { flex:1; text-align:center; }
-
-  /* Larger touch targets for Expand/Collapse */
   #expandAll, #collapseAll { padding:10px 14px; font-size:16px; }
-
   @media (min-width:1100px){
     .wrap .bd { padding:16px 18px 100px; }
   }
@@ -122,11 +96,12 @@
   </div>
 
   <div class="bd">
+    <!-- NOTE: action now points to the update route; input name is 'assigned_user' -->
     <form method="POST" action="{{ url_for('trailer_assignment.trailer_update', trailer_id=trailer.id) }}">
       {% if not read_only %}
       <div class="name-field">
         <label class="label">Your Name (who is filling this out)</label><br/>
-        <input type="text" name="submitted_by" value="{{ trailer.assigned_user or '' }}" placeholder="e.g., Jane Smith" autocomplete="name" />
+        <input type="text" name="assigned_user" value="{{ trailer.assigned_user or '' }}" placeholder="e.g., Jane Smith" autocomplete="name" />
         <div class="hint">This name will appear as the Assigned User on the dashboard and invoices.</div>
       </div>
       {% endif %}
@@ -140,7 +115,6 @@
       </div>
 
       <div class="accordion" id="inv-accordion">
-        {# Group by Category #}
         {% for group in tooling_list|groupby('Category') %}
           {% set category = group.grouper or 'General' %}
           {% set items = group.list %}
@@ -165,7 +139,6 @@
                 {% set note_redtag  = (ex.notes.redtag  if ex and ex.notes and ex.notes.get('redtag')  else '') %}
 
                 <div class="item" data-item="{{ num }}">
-                  <!-- Row 1: stacked fields -->
                   <div class="row1">
                     <div>
                       <div class="label">Item Name</div>
@@ -187,7 +160,6 @@
                     </div>
                   </div>
 
-                  <!-- Row 2: stacked controls + notes -->
                   <div class="row2">
                     <label class="chk">
                       <input type="checkbox"
@@ -312,19 +284,16 @@
 {% block scripts %}
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    // Accordion toggle (event delegation)
     document.body.addEventListener('click', function(e) {
       const header = e.target.closest('.acc-header');
       if (!header) return;
       const item = header.closest('.acc-item');
       if (!item) return;
-
       const willOpen = !item.classList.contains('open');
       item.classList.toggle('open', willOpen);
       header.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
     });
 
-    // Expand / Collapse All
     const accordion = document.getElementById('inv-accordion');
     const expandAllBtn = document.getElementById('expandAll');
     const collapseAllBtn = document.getElementById('collapseAll');
@@ -340,7 +309,6 @@
     if (expandAllBtn) expandAllBtn.addEventListener('click', function(){ setAll(true); });
     if (collapseAllBtn) collapseAllBtn.addEventListener('click', function(){ setAll(false); });
 
-    // Show/hide notes based on checkbox state (Missing / Red Tag)
     function wireItem(itemEl){
       const missing = itemEl.querySelector('input[name$="_status_missing"]') || itemEl.querySelector('input[name^="cb_"][name$="_missing"]');
       const redtag  = itemEl.querySelector('input[name$="_status_redtag"]')  || itemEl.querySelector('input[name^="cb_"][name$="_redtag"]');
@@ -359,8 +327,6 @@
       }
     }
     document.querySelectorAll('.item').forEach(wireItem);
-
-    // Prevent focus-zoom jumps on iOS by ensuring all text inputs have font-size >=16px (done via CSS).
   });
 </script>
 {% endblock %}

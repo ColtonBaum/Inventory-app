@@ -13,8 +13,8 @@ trailer_assignment_bp = Blueprint('trailer_assignment', __name__)
 def assign_trailer():
     if request.method == 'POST':
         # Required fields
-        job_name    = (request.form.get('job_name') or '').strip()
-        job_number  = (request.form.get('job_number') or '').strip()
+        job_name     = (request.form.get('job_name') or '').strip()
+        job_number   = (request.form.get('job_number') or '').strip()
         tooling_list = (request.form.get('tooling_list_name') or '').strip()
 
         # Optional fields
@@ -75,7 +75,7 @@ def assign_trailer():
 # -----------------------------------------------------------------------------
 # UPDATE (compat) — accept POSTs to /trailer/<id> from the detail page form
 # -----------------------------------------------------------------------------
-@trailer_assignment_bp.route('/trailer/<int:trailer_id>', methods=['POST'])
+@trailer_assignment_bp.route('/trailer/<int:trailer_id>', methods=['POST'], strict_slashes=False)
 def update_trailer_post(trailer_id):
     t = Trailer.query.get_or_404(trailer_id)
 
@@ -133,8 +133,10 @@ def update_trailer_post(trailer_id):
 
 # -----------------------------------------------------------------------------
 # UPDATE (explicit endpoint) — alternate POST URL used by inventory_form.html
+# Accept both /trailer/<id>/update and /trailer/<id>/update/
 # -----------------------------------------------------------------------------
-@trailer_assignment_bp.route('/trailer/<int:trailer_id>/update', methods=['POST'])
+@trailer_assignment_bp.route('/trailer/<int:trailer_id>/update', methods=['POST'], strict_slashes=False)
+@trailer_assignment_bp.route('/trailer/<int:trailer_id>/update/', methods=['POST'], strict_slashes=False)
 def trailer_update(trailer_id):
     trailer = Trailer.query.get_or_404(trailer_id)
 
@@ -177,5 +179,5 @@ def trailer_update(trailer_id):
 
     db.session.commit()
     flash('Trailer updated.', 'success')
-    # Redirect back to the detail page (this path exists and avoids broken endpoint names)
+    # Redirect back to the detail page (string path avoids endpoint name issues)
     return redirect(f'/trailer/{trailer_id}')
