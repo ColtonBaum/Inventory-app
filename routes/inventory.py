@@ -6,7 +6,7 @@ from flask import (
 from models import Trailer, InventoryResponse, Invoice
 from database import db
 from utils.invoice_generator import generate_invoice
-from utils.tooling_lists import get_tooling_list  # <-- use helper, not raw dict
+from utils.tooling_lists import get_tooling_list  # helper to fetch list by name
 from sqlalchemy import desc
 import os
 
@@ -71,6 +71,7 @@ def view_invoices():
 def add_trailer():
     """
     Optional meta add route (separate from assign flow).
+    Stores extra_tooling consistently as item_name/item_number/quantity.
     """
     if request.method == 'POST':
         tooling_items = []
@@ -79,10 +80,12 @@ def add_trailer():
         qtys = request.form.getlist('tool_qty')
 
         for name, number, qty in zip(names, numbers, qtys):
+            name = (name or '').strip()
+            number = (number or '').strip()
             if name and number:
                 tooling_items.append({
-                    'name': name,
-                    'number': number,
+                    'item_name': name,
+                    'item_number': number,
                     'quantity': int(qty or 0)
                 })
 
@@ -113,10 +116,12 @@ def edit_trailer(trailer_id):
         qtys = request.form.getlist('tool_qty')
 
         for name, number, qty in zip(names, numbers, qtys):
+            name = (name or '').strip()
+            number = (number or '').strip()
             if name and number:
                 tooling_items.append({
-                    'name': name,
-                    'number': number,
+                    'item_name': name,
+                    'item_number': number,
                     'quantity': int(qty or 0)
                 })
 
@@ -141,108 +146,25 @@ def delete_trailer(trailer_id):
     flash('Trailer deleted.', 'info')
     return redirect(url_for('inventory.dashboard'))
 
-# ---------- Inventory Form (start -> In Progress; submit -> Completed) ----------
-@inventory_bp.route('/trailer/<int:trailer_id>', methods=['GET', 'POST'])
+# ---------- Inventory Form (GET only: start -> In Progress) ----------
+@inventory_bp.route('/trailer/<int:trailer_id>', methods=['GET'])
 def inventory_form(trailer_id):
+    """
+    Renders the inventory form. When opened from Pending, mark as In Progress.
+    Actual submission is posted to `trailer_assignment.trailer_update`.
+    """
     trailer = Trailer.query.get_or_404(trailer_id)
 
-    # Resolve list name robustly, then fetch items via helper
+    # Resolve list name robustly, then fetch items
     list_name = (trailer.tooling_list_name or trailer.inventory_type or "").strip()
-    tooling_list = get_tooling_list(list_name)
+    tooling_list = get_tooling_list(list_name) or []
     current_app.logger.info(f"[INV_FORM] trailer={trailer.id} list_name='{list_name}' items={len(tooling_list)}")
 
-    # When opened, mark as In Progress if it was Pending
-    if request.method == 'GET' and trailer.status == 'Pending':
+    # Mark In Progress on first open
+    if trailer.status == 'Pending':
         trailer.status = 'In Progress'
         db.session.commit()
 
-    if request.method == 'POST':
-        submitted_by = (request.form.get('submitted_by') or "").strip()
-        if submitted_by:
-            trailer.assigned_user = submitted_by
-
-        InventoryResponse.query.filter_by(trailer_id=trailer.id).delete()
-
-        responses = []
-        flagged_items = []
-
-        # Regular tooling list
-        for item in tooling_list:
-            item_number = item['Item Number']
-            item_name = item['Item Name']
-            category = item.get('Category', 'General')
-            quantity = request.form.get(f"{item_number}_quantity", item.get('Quantity', 0))
-
-            for status_key, status_label in [
-                (f"{item_number}_status_missing", "Missing"),
-                (f"{item_number}_status_redtag", "Red Tag"),
-                (f"{item_number}_status_complete", "Complete"),
-            ]:
-                if request.form.get(status_key):
-                    note_key = f"{item_number}_note_{status_label.lower().replace(' ', '')}"
-                    note = request.form.get(note_key, '')
-
-                    response = InventoryResponse(
-                        trailer_id=trailer.id,
-                        item_number=item_number,
-                        item_name=item_name,
-                        status=status_label,
-                        note=note,
-                        quantity=int(quantity) if str(quantity).isdigit() else 0,
-                        category=category
-                    )
-                    responses.append(response)
-                    if status_label in ['Missing', 'Red Tag']:
-                        flagged_items.append(response)
-
-        db.session.add_all(responses)
-        db.session.commit()
-
-        # Invoice row
-        if flagged_items:
-            invoice_path = generate_invoice(trailer.id, flagged_items) or ""
-            db.session.add(Invoice(trailer_id=trailer.id, file_path=invoice_path))
-        else:
-            db.session.add(Invoice(trailer_id=trailer.id, file_path=""))
-
-        # Extra tooling credit-back
-        extra_responses = []
-        credit_back_items = trailer.extra_tooling or []
-        for i, item in enumerate(credit_back_items):
-            item_name = item['name']
-            item_number = item['number']
-            quantity = request.form.get(f"cb_{i}_quantity", item.get('quantity', 0))
-
-            for status_key, status_label in [
-                (f"cb_{i}_missing", "Missing"),
-                (f"cb_{i}_redtag", "Red Tag"),
-                (f"cb_{i}_complete", "Complete"),
-            ]:
-                if request.form.get(status_key):
-                    note_key = f"cb_{i}_note_{status_label.lower().replace(' ', '')}"
-                    note = request.form.get(note_key, '')
-
-                    response = InventoryResponse(
-                        trailer_id=trailer.id,
-                        item_number=item_number,
-                        item_name=item_name,
-                        status=status_label,
-                        note=note,
-                        quantity=int(quantity) if str(quantity).isdigit() else 0,
-                        category='Extra Tooling'
-                    )
-                    extra_responses.append(response)
-
-        if extra_responses:
-            db.session.add_all(extra_responses)
-
-        trailer.status = 'Completed'
-        db.session.commit()
-
-        flash('Inventory submitted. Trailer marked Completed and invoice added to Invoices.', 'success')
-        return redirect(url_for('inventory.pull_list', trailer_id=trailer.id))
-
-    # GET
     return render_template(
         'inventory_form.html',
         trailer=trailer,
@@ -258,7 +180,7 @@ def view_form(trailer_id):
     trailer = Trailer.query.get_or_404(trailer_id)
 
     list_name = (trailer.tooling_list_name or trailer.inventory_type or "").strip()
-    tooling_list = get_tooling_list(list_name)
+    tooling_list = get_tooling_list(list_name) or []
     current_app.logger.info(f"[INV_VIEW] trailer={trailer.id} list_name='{list_name}' items={len(tooling_list)}")
 
     existing_responses = InventoryResponse.query.filter_by(trailer_id=trailer.id).all()
@@ -334,7 +256,7 @@ def edit_submission(trailer_id):
     trailer = Trailer.query.get_or_404(trailer_id)
 
     list_name = (trailer.tooling_list_name or trailer.inventory_type or "").strip()
-    tooling_list = get_tooling_list(list_name)
+    tooling_list = get_tooling_list(list_name) or []
     current_app.logger.info(f"[INV_EDIT] trailer={trailer.id} list_name='{list_name}' items={len(tooling_list)}")
 
     if request.method == 'POST':
@@ -342,6 +264,7 @@ def edit_submission(trailer_id):
         if submitted_by:
             trailer.assigned_user = submitted_by
 
+        # Clear previous responses & invoices
         InventoryResponse.query.filter_by(trailer_id=trailer.id).delete()
         Invoice.query.filter_by(trailer_id=trailer.id).delete()
         db.session.commit()
@@ -349,6 +272,7 @@ def edit_submission(trailer_id):
         responses = []
         flagged_items = []
 
+        # Re-collect regular tooling responses
         for item in tooling_list:
             item_number = item['Item Number']
             item_name = item['Item Name']
@@ -380,18 +304,19 @@ def edit_submission(trailer_id):
         db.session.add_all(responses)
         db.session.commit()
 
+        # Recreate invoice (or empty record)
         if flagged_items:
             invoice_path = generate_invoice(trailer.id, flagged_items) or ""
             db.session.add(Invoice(trailer_id=trailer.id, file_path=invoice_path))
         else:
             db.session.add(Invoice(trailer_id=trailer.id, file_path=""))
 
-        # Extra tooling (credit-back)
+        # Extra tooling (credit-back) — use normalized keys
         extra_responses = []
         credit_back_items = trailer.extra_tooling or []
         for i, item in enumerate(credit_back_items):
-            item_name = item['name']
-            item_number = item['number']
+            item_name = item.get('item_name') or ''
+            item_number = item.get('item_number') or ''
             quantity = request.form.get(f"cb_{i}_quantity", item.get('quantity', 0))
 
             for status_key, status_label in [

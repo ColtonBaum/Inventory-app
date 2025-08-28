@@ -18,10 +18,12 @@ def assign_trailer():
         tooling_list = (request.form.get('tooling_list_name') or '').strip()
 
         # Optional fields
-        location      = (request.form.get('location') or '').strip()
-        assigned_user = (request.form.get('assigned_user') or '').strip() or None
-        foreman_name  = (request.form.get('foreman_name') or '').strip() or None
-        external_id   = (request.form.get('trailer_id') or '').strip() or None  # external trailer ID
+        location       = (request.form.get('location') or '').strip()
+        # if the form provided submitted_by, treat that as assigned_user
+        submitted_by   = (request.form.get('submitted_by') or '').strip()
+        assigned_user  = (request.form.get('assigned_user') or submitted_by or '').strip() or None
+        foreman_name   = (request.form.get('foreman_name') or '').strip() or None
+        external_id    = (request.form.get('trailer_id') or '').strip() or None  # external trailer ID
 
         # Optional: extra tooling credit-back items
         extra_tooling_data = []
@@ -65,6 +67,7 @@ def assign_trailer():
         db.session.commit()
 
         flash('Trailer assigned.', 'success')
+        # Back to dashboard; you can change to return redirect(f'/trailer/{t.id}') if preferred
         return redirect(url_for('inventory.dashboard'))
 
     # GET – render the form
@@ -74,6 +77,7 @@ def assign_trailer():
 
 # -----------------------------------------------------------------------------
 # UPDATE (compat) — accept POSTs to /trailer/<id> from the detail page form
+# Accepts optional trailing slash.
 # -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>', methods=['POST'], strict_slashes=False)
 def update_trailer_post(trailer_id):
@@ -83,7 +87,11 @@ def update_trailer_post(trailer_id):
     job_name        = (request.form.get('job_name') or '').strip() or t.job_name
     job_number      = (request.form.get('job_number') or '').strip() or t.job_number
     location        = (request.form.get('location') or '').strip() or t.location
-    assigned_user   = (request.form.get('assigned_user') or '').strip() or t.assigned_user
+
+    # prefer submitted_by if present; else assigned_user; else keep existing
+    submitted_by    = (request.form.get('submitted_by') or '').strip()
+    assigned_user   = (request.form.get('assigned_user') or submitted_by or '').strip() or t.assigned_user
+
     foreman_name    = (request.form.get('foreman_name') or '').strip() or t.foreman_name
     tooling_list    = (request.form.get('tooling_list_name') or '').strip() or t.tooling_list_name
     status          = (request.form.get('status') or '').strip() or t.status
@@ -141,9 +149,10 @@ def trailer_update(trailer_id):
     trailer = Trailer.query.get_or_404(trailer_id)
 
     # Basic fields
-    trailer.location = (request.form.get('location') or trailer.location or '').strip()
-    trailer.assigned_user = (request.form.get('assigned_user') or '').strip() or None
-    trailer.status = (request.form.get('status') or trailer.status or 'Pending').strip()
+    trailer.location      = (request.form.get('location') or trailer.location or '').strip()
+    submitted_by          = (request.form.get('submitted_by') or '').strip()
+    trailer.assigned_user = (request.form.get('assigned_user') or submitted_by or '').strip() or None
+    trailer.status        = (request.form.get('status') or trailer.status or 'Pending').strip()
 
     # Optional job fields
     if 'job_name' in request.form:
@@ -179,5 +188,5 @@ def trailer_update(trailer_id):
 
     db.session.commit()
     flash('Trailer updated.', 'success')
-    # Redirect back to the detail page (string path avoids endpoint name issues)
+    # Redirect back to the detail page (string path avoids endpoint lookup issues)
     return redirect(f'/trailer/{trailer_id}')
