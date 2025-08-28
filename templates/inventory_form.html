@@ -122,7 +122,7 @@
   </div>
 
   <div class="bd">
-    <form method="POST">
+    <form method="POST" action="{{ url_for('trailer_assignment.trailer_update', trailer_id=trailer.id) }}">
       {% if not read_only %}
       <div class="name-field">
         <label class="label">Your Name (who is filling this out)</label><br/>
