@@ -6,13 +6,15 @@ from utils.tooling_lists import tooling_lists  # for rendering dynamic options
 
 trailer_assignment_bp = Blueprint('trailer_assignment', __name__)
 
+# -----------------------------------------------------------------------------
 # CREATE / ASSIGN — show form and create a trailer
+# -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/assign_trailer', methods=['GET', 'POST'], endpoint='assign_trailer')
 def assign_trailer():
     if request.method == 'POST':
         # Required fields
-        job_name   = (request.form.get('job_name') or '').strip()
-        job_number = (request.form.get('job_number') or '').strip()
+        job_name    = (request.form.get('job_name') or '').strip()
+        job_number  = (request.form.get('job_number') or '').strip()
         tooling_list = (request.form.get('tooling_list_name') or '').strip()
 
         # Optional fields
@@ -46,14 +48,14 @@ def assign_trailer():
                         'category': cat or 'Extra Tooling'
                     })
 
-        # Persist
+        # Persist new trailer
         t = Trailer(
             trailer_id=external_id,
             job_name=job_name,
             job_number=job_number,
             location=location,
             tooling_list_name=tooling_list,
-            inventory_type=tooling_list,
+            inventory_type=tooling_list,  # mirrored for compatibility
             assigned_user=assigned_user,
             status='Pending',
             extra_tooling=extra_tooling_data or None,
@@ -70,11 +72,14 @@ def assign_trailer():
     return render_template('assign_trailer.html', list_options=list_options)
 
 
-# UPDATE (compat) — accept POSTs to /trailer/<id> from the detail page
+# -----------------------------------------------------------------------------
+# UPDATE (compat) — accept POSTs to /trailer/<id> from the detail page form
+# -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>', methods=['POST'])
 def update_trailer_post(trailer_id):
     t = Trailer.query.get_or_404(trailer_id)
 
+    # Read fields safely; ignore missing ones
     job_name        = (request.form.get('job_name') or '').strip() or t.job_name
     job_number      = (request.form.get('job_number') or '').strip() or t.job_number
     location        = (request.form.get('location') or '').strip() or t.location
@@ -83,6 +88,7 @@ def update_trailer_post(trailer_id):
     tooling_list    = (request.form.get('tooling_list_name') or '').strip() or t.tooling_list_name
     status          = (request.form.get('status') or '').strip() or t.status
 
+    # Optional: handle extra tooling rows if your form posts them
     extra_tooling_data = None
     if request.form.get('enable_credit_back'):
         raw        = request.form.to_dict(flat=False)
@@ -125,20 +131,25 @@ def update_trailer_post(trailer_id):
     return redirect(f'/trailer/{t.id}')
 
 
-# UPDATE (explicit endpoint) — alternate POST URL
+# -----------------------------------------------------------------------------
+# UPDATE (explicit endpoint) — alternate POST URL used by inventory_form.html
+# -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update', methods=['POST'])
 def trailer_update(trailer_id):
     trailer = Trailer.query.get_or_404(trailer_id)
 
+    # Basic fields
     trailer.location = (request.form.get('location') or trailer.location or '').strip()
     trailer.assigned_user = (request.form.get('assigned_user') or '').strip() or None
     trailer.status = (request.form.get('status') or trailer.status or 'Pending').strip()
 
+    # Optional job fields
     if 'job_name' in request.form:
         trailer.job_name = (request.form.get('job_name') or trailer.job_name or '').strip()
     if 'job_number' in request.form:
         trailer.job_number = (request.form.get('job_number') or trailer.job_number or '').strip()
 
+    # Optional: update extra tooling entries
     enable_credit_back = request.form.get('enable_credit_back')
     if enable_credit_back is not None:
         raw        = request.form.to_dict(flat=False)
@@ -166,4 +177,5 @@ def trailer_update(trailer_id):
 
     db.session.commit()
     flash('Trailer updated.', 'success')
-    return redirect(url_for('inventory.trailer_detail', trailer_id=trailer_id))
+    # Redirect back to the detail page (this path exists and avoids broken endpoint names)
+    return redirect(f'/trailer/{trailer_id}')
