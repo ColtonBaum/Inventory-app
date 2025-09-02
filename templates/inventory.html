@@ -3,12 +3,12 @@
 <head>
     <title>Inventory for Trailer #{{ trailer.id }}</title>
     <style>
-        .accordion { margin: 10px 0; }
-        .item-group { margin-left: 20px; margin-bottom: 15px; }
-        .item-detail { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
-        .item-detail input[type="text"],
+        .item-detail { display: flex; gap: 15px; align-items: flex-start; margin-bottom: 12px; }
+        .item-detail span { min-width: 220px; display: inline-block; }
         .item-detail input[type="number"],
-        .item-detail select { padding: 4px; }
+        .item-detail input[type="text"] { padding: 4px; }
+        .chk { display: flex; align-items: center; gap: 6px; }
+        .note { display: none; }
     </style>
 </head>
 <body>
@@ -27,45 +27,64 @@
         <h3>Tooling List</h3>
         {% for item in inventory_data %}
             <div class="item-detail">
-                <span>
-                    {{ item.itemName }} (#{{ item.itemNumber }}) — Expected: {{ item.quantity }}
-                </span>
-                <label>Status:
-                    <select name="{{ item.itemNumber }}_status" required>
-                        <option value="">-- Select --</option>
-                        <option value="Complete">Complete</option>
-                        <option value="Missing">Missing</option>
-                        <option value="Red Tag">Red Tag</option>
-                    </select>
-                </label>
+                <span>{{ item.itemName }} (#{{ item.itemNumber }}) — Expected: {{ item.quantity }}</span>
+                
+                <div class="chk">
+                    <input type="checkbox" name="{{ item.itemNumber }}_status_missing" value="Missing">
+                    Missing
+                </div>
+                <input type="text" name="{{ item.itemNumber }}_note_missing" placeholder="Missing notes…">
+
+                <div class="chk">
+                    <input type="checkbox" name="{{ item.itemNumber }}_status_redtag" value="Red Tag">
+                    Red Tag
+                </div>
+                <input type="text" name="{{ item.itemNumber }}_note_redtag" placeholder="Red tag notes…">
+
+                <div class="chk">
+                    <input type="checkbox" name="{{ item.itemNumber }}_status_complete" value="Complete" checked>
+                    Complete
+                </div>
+
                 <label>Qty:
                     <input type="number" name="{{ item.itemNumber }}_quantity" min="0" value="{{ item.quantity }}">
                 </label>
-                <label>Note:
-                    <input type="text" name="{{ item.itemNumber }}_note">
-                </label>
+
+                <input type="hidden" name="{{ item.itemNumber }}_item_name" value="{{ item.itemName }}">
+                <input type="hidden" name="{{ item.itemNumber }}_category" value="{{ item.category or 'General' }}">
             </div>
         {% endfor %}
 
-        <!-- Extra Tooling Credit-Back Section -->
+        <!-- Extra Tooling Credit-Back -->
         {% if trailer.extra_tooling %}
             <h3>Extra Tooling</h3>
             {% for item in trailer.extra_tooling %}
                 <div class="item-detail">
                     <span>{{ item.name }} (#{{ item.number }}) — Expected: {{ item.quantity }}</span>
-                    <label>Status:
-                        <select name="extra_{{ loop.index }}_status" required>
-                            <option value="">-- Select --</option>
-                            <option value="Returned">Returned</option>
-                            <option value="Not Returned">Not Returned</option>
-                        </select>
-                    </label>
+
+                    <div class="chk">
+                        <input type="checkbox" name="cb_{{ loop.index0 }}_missing" value="Missing">
+                        Missing
+                    </div>
+                    <input type="text" name="cb_{{ loop.index0 }}_note_missing" placeholder="Missing notes…">
+
+                    <div class="chk">
+                        <input type="checkbox" name="cb_{{ loop.index0 }}_redtag" value="Red Tag">
+                        Red Tag
+                    </div>
+                    <input type="text" name="cb_{{ loop.index0 }}_note_redtag" placeholder="Red tag notes…">
+
+                    <div class="chk">
+                        <input type="checkbox" name="cb_{{ loop.index0 }}_complete" value="Complete" checked>
+                        Complete
+                    </div>
+
                     <label>Qty Returned:
-                        <input type="number" name="extra_{{ loop.index }}_quantity" min="0" value="{{ item.quantity }}">
+                        <input type="number" name="cb_{{ loop.index0 }}_quantity" min="0" value="{{ item.quantity }}">
                     </label>
-                    <label>Note:
-                        <input type="text" name="extra_{{ loop.index }}_note">
-                    </label>
+
+                    <input type="hidden" name="cb_{{ loop.index0 }}_item_name" value="{{ item.name }}">
+                    <input type="hidden" name="cb_{{ loop.index0 }}_item_number" value="{{ item.number }}">
                 </div>
             {% endfor %}
         {% endif %}
