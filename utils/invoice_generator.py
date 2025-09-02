@@ -1,50 +1,38 @@
-# inventory_app/utils/invoice_generator.py
-import os
+# utils/invoice_generator.py
 from datetime import datetime
 from pathlib import Path
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from jinja2 import Environment, FileSystemLoader
-from config import Config
+# Project structure: <project_root>/{templates, static/invoices}
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TEMPLATES_DIR = PROJECT_ROOT / "templates"
+OUTPUT_DIR = PROJECT_ROOT / "static" / "invoices"   # served at /static/invoices/<file>.html
 
-# Paths
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
-PROJECT_ROOT = TEMPLATES_DIR.parent  # use as base_url for assets (e.g., /static)
-env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+env = Environment(
+    loader=FileSystemLoader(str(TEMPLATES_DIR)),
+    autoescape=select_autoescape(["html", "xml"]),
+)
 
 def generate_invoice(trailer_id, items):
     """
-    Generate an invoice PDF (WeasyPrint). If PDF generation fails,
-    fall back to saving an .html file and return that path.
+    Render an HTML invoice using templates/invoice_template.html
+    and save it to static/invoices/invoice_trailer_<id>_<timestamp>.html
+
+    Returns the absolute filesystem path (string) to the saved HTML file.
     """
-    # Ensure output directory exists
-    os.makedirs(Config.INVOICE_OUTPUT_PATH, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Filenames
-    ts = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    pdf_filename = f"invoice_trailer_{trailer_id}_{ts}.pdf"
-    html_filename = f"invoice_trailer_{trailer_id}_{ts}.html"
-    pdf_path = os.path.join(Config.INVOICE_OUTPUT_PATH, pdf_filename)
-    html_path = os.path.join(Config.INVOICE_OUTPUT_PATH, html_filename)
+    ts_pretty = datetime.now().strftime("%Y-%m-%d %H:%M")
+    ts_slug = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    filename = f"invoice_trailer_{trailer_id}_{ts_slug}.html"
+    out_path = OUTPUT_DIR / filename
 
-    # Render HTML with Jinja2
     template = env.get_template("invoice_template.html")
-    html_content = template.render(
+    html = template.render(
         trailer_id=trailer_id,
-        items=items,  # expect a list of objects/dicts with item_name, item_number, quantity, status, note, etc.
-        date=datetime.now().strftime("%Y-%m-%d %H:%M")
+        items=items,           # list of responses with item_name, item_number, quantity, status, note, etc.
+        date=ts_pretty,
     )
 
-    # Try to write PDF via WeasyPrint
-    try:
-        from weasyprint import HTML  # lazy import so the app can still run without it locally
-        HTML(string=html_content, base_url=str(PROJECT_ROOT)).write_pdf(pdf_path)
-        return pdf_path
-    except Exception as e:
-        # Fallback: write raw HTML so the user still gets a downloadable artifact
-        try:
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(html_content)
-            return html_path
-        except Exception:
-            # If even HTML fails, re-raise the original PDF error for logs
-            raise e
+    out_path.write_text(html, encoding="utf-8")
+    return str(out_path)
