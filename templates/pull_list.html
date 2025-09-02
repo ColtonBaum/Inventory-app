@@ -65,8 +65,12 @@
             <div><strong>Foreman:</strong> {{ trailer.foreman_name }}</div>
             <div><strong>Tooling List:</strong> {{ trailer.tooling_list_name }}</div>
             <div><strong>Assigned User:</strong> {{ trailer.assigned_user or '—' }}</div>
-            <!-- If you have an external trailer ID field on the model (e.g. tool_trailer_id),
-                 show it here; otherwise remove this line. -->
+
+            {# LN-25 serials (supports multiple possible attribute names) #}
+            {% set ln25 = trailer.ln_25s or trailer.lN_25s or trailer.ln25 or trailer.LN_25 %}
+            <div><strong>LN-25:</strong> {{ ln25 or '—' }}</div>
+
+            {# External trailer ID if different from db PK #}
             {% if trailer.tool_trailer_id %}
                 <div><strong>Tool Trailer ID:</strong> {{ trailer.tool_trailer_id }}</div>
             {% elif trailer.trailer_id and trailer.trailer_id != trailer.id %}

@@ -13,7 +13,18 @@
   .btn { appearance:none; border:none; border-radius:8px; padding:10px 14px; background:#2563eb; color:#fff; cursor:pointer; }
   .btn:hover { background:#1d4ed8; }
   .btn.muted { background:#6b7280; }
+  .btn.ghost { background:#fff; color:#111827; border:1px solid #d1d5db; }
   .hint { color:#6b7280; font-size:12px; }
+
+  /* Extra tooling rows */
+  #extra-tooling { margin-top:10px; }
+  #extra-rows .extra-row{
+    display:grid;
+    grid-template-columns: 1fr 1fr 120px 1fr auto;
+    gap:8px;
+    margin-bottom:8px;
+    align-items:center;
+  }
 </style>
 {% endblock %}
 
@@ -38,7 +49,7 @@
         <input class="input" type="text" name="job_number" required>
       </div>
 
-<input type="hidden" name="location" value="">
+      <input type="hidden" name="location" value="">
 
       <div class="field">
         <label>Tooling List *</label>
@@ -58,10 +69,62 @@
       </div>
     </div>
 
+    <!-- Extra Tooling (credit-back) -->
+    <hr style="margin:16px 0">
+    <label style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+      <input type="checkbox" name="enable_credit_back" value="1">
+      Add Extra Tooling (credit-back)
+    </label>
+
+    <div id="extra-tooling" style="display:none;">
+      <div id="extra-rows"></div>
+      <button type="button" id="add-extra" class="btn" style="margin-top:8px;">+ Add Item</button>
+      <p class="hint" style="margin-top:6px;">
+        Saved as <code>item_name</code> / <code>item_number</code> / <code>quantity</code> / <code>category</code>.
+      </p>
+    </div>
+
     <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
       <button class="btn" type="submit">Assign Trailer</button>
       <a class="btn muted" href="{{ url_for('inventory.dashboard') }}">Cancel</a>
     </div>
   </form>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const cb = document.querySelector('input[name="enable_credit_back"]');
+    const wrap = document.getElementById('extra-tooling');
+    const rows = document.getElementById('extra-rows');
+    const addBtn = document.getElementById('add-extra');
+
+    function toggleExtra() {
+      wrap.style.display = cb && cb.checked ? 'block' : 'none';
+    }
+
+    function makeRow() {
+      const div = document.createElement('div');
+      div.className = 'extra-row';
+      div.innerHTML = `
+        <input class="input" name="extra_tooling_items[item_name][]"   placeholder="Item name">
+        <input class="input" name="extra_tooling_items[item_number][]" placeholder="Item #">
+        <input class="input" name="extra_tooling_items[quantity][]"   type="number" min="0" value="1">
+        <input class="input" name="extra_tooling_items[category][]"   placeholder="Category (optional)">
+        <button type="button" class="btn ghost remove">Remove</button>
+      `;
+      div.querySelector('.remove').addEventListener('click', () => div.remove());
+      return div;
+    }
+
+    if (cb) {
+      cb.addEventListener('change', toggleExtra);
+      toggleExtra();
+    }
+    if (addBtn) {
+      addBtn.addEventListener('click', () => rows.appendChild(makeRow()));
+    }
+  })();
+</script>
 {% endblock %}
