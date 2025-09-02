@@ -5,8 +5,9 @@ from flask import (
 )
 from models import Trailer, InventoryResponse, Invoice
 from database import db
+    # helper to fetch list by name
 from utils.invoice_generator import generate_invoice
-from utils.tooling_lists import get_tooling_list  # helper to fetch list by name
+from utils.tooling_lists import get_tooling_list
 from sqlalchemy import desc
 import os
 
@@ -65,6 +66,24 @@ def view_invoices():
 
     return render_template('invoices.html', invoices=invoices, trailers=trailers, q=q)
 
+# NEW: Delete an invoice (removes DB row and file if present)
+@inventory_bp.route('/invoice/<int:invoice_id>/delete', methods=['POST'])
+def delete_invoice(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+
+    # Best-effort file removal
+    try:
+        if invoice.file_path:
+            file_path = os.path.abspath(invoice.file_path)
+            if os.path.exists(file_path):
+                os.remove(file_path)
+    except Exception:
+        current_app.logger.exception("Failed to remove invoice file")
+
+    db.session.delete(invoice)
+    db.session.commit()
+    flash('Invoice deleted.', 'info')
+    return redirect(url_for('inventory.view_invoices'))
 
 # ---------- Add / Edit / Delete Trailer (meta) ----------
 @inventory_bp.route('/trailer/add', methods=['GET', 'POST'])
