@@ -13,19 +13,18 @@
         .header h2 { margin: 0 0 8px; }
         .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 24px; }
         .meta div { font-size: 14px; }
+        h3.section-title { margin: 18px 0 8px; }
         table {
             border-collapse: collapse;
             width: 100%;
-            margin-top: 12px;
+            margin-top: 8px;
         }
         th, td {
             border: 1px solid #ccc;
             padding: 8px 10px;
             text-align: left;
         }
-        th {
-            background: #f7f7f7;
-        }
+        th { background: #f7f7f7; }
         .pill {
             display: inline-block;
             padding: 2px 8px;
@@ -47,12 +46,8 @@
             border: none;
             display: inline-block;
         }
-        .actions a.secondary, .actions button.secondary {
-            background: #6c757d;
-        }
-        @media print {
-            .actions { display: none; }
-        }
+        .actions a.secondary, .actions button.secondary { background: #6c757d; }
+        @media print { .actions { display: none; } }
     </style>
 </head>
 <body>
@@ -79,7 +74,9 @@
         </div>
     </div>
 
+    {# -------- Main (regular) inventory flagged items -------- #}
     {% if rows and rows|length %}
+        <h3 class="section-title">Flagged Items (Main Inventory)</h3>
         <table>
             <thead>
                 <tr>
@@ -101,7 +98,35 @@
             </tbody>
         </table>
         <div class="footer-note">Only items marked Missing or Red Tag are shown.</div>
-    {% else %}
+    {% endif %}
+
+    {# -------- Extra Tooling (credit-back) flagged items -------- #}
+    {% if extra_rows and extra_rows|length %}
+        <h3 class="section-title">Extra Tooling (Credit-Back)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 40%;">Item Name</th>
+                    <th style="width: 20%;">Item #</th>
+                    <th style="width: 20%;">Missing Qty</th>
+                    <th style="width: 20%;">Red Tag Qty</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in extra_rows %}
+                <tr>
+                    <td>{{ r.item_name }}</td>
+                    <td>{{ r.item_number }}</td>
+                    <td>{{ r.missing_qty or 0 }}</td>
+                    <td>{{ r.redtag_qty or 0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="footer-note">Extra Tooling items reported as Missing or Red Tag are listed here.</div>
+    {% endif %}
+
+    {% if (not rows or not rows|length) and (not extra_rows or not extra_rows|length) %}
         <p class="muted">No Missing or Red Tag items were reported on this submission.</p>
     {% endif %}
 
