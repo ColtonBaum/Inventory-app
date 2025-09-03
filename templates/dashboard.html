@@ -3,69 +3,36 @@
 
 {% block head_extra %}
 <style>
-  /* Container that enables horizontal scroll on narrow screens */
+  /* Base table sizing */
+  table { font-size: 15px; border-collapse: collapse; width: 100%; }
+  th, td { vertical-align: middle; padding: 10px; border-bottom: 1px solid #e5e7eb; }
+
+  /* Wrap the table so it can scroll on tablets/phones instead of smashing columns */
   .table-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Responsive table: stable column sizing and safe wrapping */
-  table.responsive {
     width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;     /* avoids odd stretching */
-    min-width: 900px;        /* allow horizontal scroll when narrower */
-    font-size: 15px;
-  }
-  table.responsive th,
-  table.responsive td {
-    vertical-align: middle;
-    padding: 12px 10px;
-    border-bottom: 1px solid #e5e7eb;
-    word-wrap: break-word;
-    overflow-wrap: anywhere;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch; /* momentum scroll on iOS */
   }
 
-  /* Actions column */
-  th.actions-cell,
-  td.actions-cell {
-    width: 1%;               /* prevents actions column from stealing width */
-    white-space: normal;     /* allow wrapping */
-  }
+  /* Let long text (job name, location) wrap normally to save horizontal space */
+  td, th { white-space: normal; }
 
-  /* Actions group */
-  .actions {
+  /* Actions column: keep buttons readable and prevent them from collapsing vertically */
+  .col-actions { min-width: 320px; } /* enough room for 2–3 small buttons */
+  @media (max-width: 1200px) { .col-actions { min-width: 360px; } } /* a bit wider on iPad widths */
+  @media (max-width: 900px)  { .col-actions { min-width: 420px; } }
+
+  /* Actions row: wraps to multiple rows if needed, but each button label stays on one line */
+  .actions-row {
     display: flex;
-    flex-wrap: wrap;         /* wrap to next line if needed */
     gap: 8px;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: flex-start;
   }
+  .actions-row .btn.small { padding: 6px 10px; font-size: 13px; white-space: nowrap; }
 
-  /* Buttons (slightly smaller in-table) */
-  .btn.small { padding: 8px 12px; font-size: 14px; border-radius: 8px; white-space: nowrap; }
-
-  /* Filters layout spacing */
+  /* Filters */
   .filters .field input, .filters .field select { width: 100%; }
-
-  /* On iPad and below, stack action buttons full-width to avoid overflow */
-  @media (max-width: 1024px) {
-    td.actions-cell .actions {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 6px;
-    }
-    td.actions-cell .actions .btn.small {
-      width: 100%;
-      text-align: center;
-    }
-  }
-
-  /* Optional: slightly tighter on smaller screens */
-  @media (max-width: 768px) {
-    table.responsive { min-width: 720px; }
-    .btn.small { padding: 8px 10px; font-size: 13px; }
-  }
 </style>
 {% endblock %}
 
@@ -94,7 +61,6 @@
           <option value="Pending"     {% if request.args.get('status') == 'Pending' %}selected{% endif %}>Pending</option>
           <option value="In Progress" {% if request.args.get('status') == 'In Progress' %}selected{% endif %}>In Progress</option>
           <option value="Needs Review"{% if request.args.get('status') == 'Needs Review' %}selected{% endif %}>Needs Review</option>
-          <!-- Completed are typically excluded from the dashboard; they appear in Invoices tab -->
         </select>
       </div>
       <div class="field">
@@ -112,9 +78,9 @@
       </div>
     </form>
 
-    <!-- Table -->
+    <!-- Scrollable table wrapper -->
     <div class="table-wrap">
-      <table class="responsive">
+      <table>
         <thead>
           <tr>
             <th>ID</th>
@@ -124,7 +90,7 @@
             <th>Tooling List</th>
             <th>Status</th>
             <th>Assigned User</th>
-            <th class="actions-cell">Actions</th>
+            <th class="col-actions">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -137,8 +103,8 @@
             <td>{{ trailer.tooling_list_name or '—' }}</td>
             <td>{{ trailer.status }}</td>
             <td>{{ trailer.assigned_user or 'Unassigned' }}</td>
-            <td class="actions-cell">
-              <div class="actions">
+            <td class="col-actions">
+              <div class="actions-row">
                 {% if trailer.status == 'Pending' %}
                   <a class="btn small primary" href="{{ url_for('inventory.inventory_form', trailer_id=trailer.id) }}">Start Inventory</a>
                 {% elif trailer.status == 'In Progress' %}
