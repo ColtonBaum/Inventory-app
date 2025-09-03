@@ -3,25 +3,69 @@
 
 {% block head_extra %}
 <style>
-  /* Make table a bit larger and more readable */
-  table { font-size: 15px; }
-  th, td { vertical-align: middle; }
-
-  /* Actions row: prevent overlap & allow wrap on smaller screens */
-  .actions-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
+  /* Container that enables horizontal scroll on narrow screens */
+  .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
-  .w-actions { width: 360px; } /* give actions more breathing room */
-  @media (max-width: 1024px) { .w-actions { width: 100%; } }
 
-  /* Small buttons spacing inside table */
-  .btn.small { padding: 6px 10px; font-size: 13px; }
+  /* Responsive table: stable column sizing and safe wrapping */
+  table.responsive {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;     /* avoids odd stretching */
+    min-width: 900px;        /* allow horizontal scroll when narrower */
+    font-size: 15px;
+  }
+  table.responsive th,
+  table.responsive td {
+    vertical-align: middle;
+    padding: 12px 10px;
+    border-bottom: 1px solid #e5e7eb;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
 
-  /* Filter grid spacing */
+  /* Actions column */
+  th.actions-cell,
+  td.actions-cell {
+    width: 1%;               /* prevents actions column from stealing width */
+    white-space: normal;     /* allow wrapping */
+  }
+
+  /* Actions group */
+  .actions {
+    display: flex;
+    flex-wrap: wrap;         /* wrap to next line if needed */
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  /* Buttons (slightly smaller in-table) */
+  .btn.small { padding: 8px 12px; font-size: 14px; border-radius: 8px; white-space: nowrap; }
+
+  /* Filters layout spacing */
   .filters .field input, .filters .field select { width: 100%; }
+
+  /* On iPad and below, stack action buttons full-width to avoid overflow */
+  @media (max-width: 1024px) {
+    td.actions-cell .actions {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+    }
+    td.actions-cell .actions .btn.small {
+      width: 100%;
+      text-align: center;
+    }
+  }
+
+  /* Optional: slightly tighter on smaller screens */
+  @media (max-width: 768px) {
+    table.responsive { min-width: 720px; }
+    .btn.small { padding: 8px 10px; font-size: 13px; }
+  }
 </style>
 {% endblock %}
 
@@ -69,53 +113,54 @@
     </form>
 
     <!-- Table -->
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Trailer ID</th>
-          <th>Job Name</th>
-          <th>Job Number</th>
-          <th>Tooling List</th>
-          <th>Status</th>
-          <th>Assigned User</th>
-          <th class="w-actions">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for trailer in trailers %}
-        <tr>
-          <td>{{ trailer.id }}</td>
-          <td>{{ trailer.trailer_id or '—' }}</td>
-          <td>{{ trailer.job_name }}</td>
-          <td>{{ trailer.job_number }}</td>
-          <td>{{ trailer.tooling_list_name or '—' }}</td>
-          <td>{{ trailer.status }}</td>
-          <td>{{ trailer.assigned_user or 'Unassigned' }}</td>
-          <td>
-            <div class="actions-row">
-              {% if trailer.status == 'Pending' %}
-                <a class="btn small primary" href="{{ url_for('inventory.inventory_form', trailer_id=trailer.id) }}">Start Inventory</a>
-              {% elif trailer.status == 'In Progress' %}
-                <a class="btn small primary" href="{{ url_for('inventory.inventory_form', trailer_id=trailer.id) }}">Resume Inventory</a>
-              {% else %}
-                <!-- Typically Completed trailers are not shown on dashboard -->
-                <a class="btn small ghost" href="{{ url_for('inventory.view_form', trailer_id=trailer.id) }}">View Form</a>
-                <a class="btn small primary" href="{{ url_for('inventory.edit_submission', trailer_id=trailer.id) }}">Edit Submission</a>
-              {% endif %}
+    <div class="table-wrap">
+      <table class="responsive">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Trailer ID</th>
+            <th>Job Name</th>
+            <th>Job Number</th>
+            <th>Tooling List</th>
+            <th>Status</th>
+            <th>Assigned User</th>
+            <th class="actions-cell">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for trailer in trailers %}
+          <tr>
+            <td>{{ trailer.id }}</td>
+            <td>{{ trailer.trailer_id or '—' }}</td>
+            <td>{{ trailer.job_name }}</td>
+            <td>{{ trailer.job_number }}</td>
+            <td>{{ trailer.tooling_list_name or '—' }}</td>
+            <td>{{ trailer.status }}</td>
+            <td>{{ trailer.assigned_user or 'Unassigned' }}</td>
+            <td class="actions-cell">
+              <div class="actions">
+                {% if trailer.status == 'Pending' %}
+                  <a class="btn small primary" href="{{ url_for('inventory.inventory_form', trailer_id=trailer.id) }}">Start Inventory</a>
+                {% elif trailer.status == 'In Progress' %}
+                  <a class="btn small primary" href="{{ url_for('inventory.inventory_form', trailer_id=trailer.id) }}">Resume Inventory</a>
+                {% else %}
+                  <a class="btn small ghost" href="{{ url_for('inventory.view_form', trailer_id=trailer.id) }}">View Form</a>
+                  <a class="btn small primary" href="{{ url_for('inventory.edit_submission', trailer_id=trailer.id) }}">Edit Submission</a>
+                {% endif %}
 
-              <form method="POST"
-                    action="{{ url_for('inventory.delete_trailer', trailer_id=trailer.id) }}"
-                    onsubmit="return confirm('Delete this trailer?');"
-                    style="display:inline;">
-                <button class="btn small danger" type="submit">Delete</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+                <form method="POST"
+                      action="{{ url_for('inventory.delete_trailer', trailer_id=trailer.id) }}"
+                      onsubmit="return confirm('Delete this trailer?');"
+                      style="display:inline;">
+                  <button class="btn small danger" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
 
   </div>
 </div>
