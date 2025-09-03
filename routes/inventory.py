@@ -5,9 +5,8 @@ from flask import (
 )
 from models import Trailer, InventoryResponse, Invoice
 from database import db
-    # helper to fetch list by name
 from utils.invoice_generator import generate_invoice
-from utils.tooling_lists import get_tooling_list
+from utils.tooling_lists import get_tooling_list  # helper to fetch list by name
 from sqlalchemy import desc
 import os
 
@@ -234,28 +233,43 @@ def pull_list(trailer_id):
                        InventoryResponse.status.in_(["Missing", "Red Tag"]))
                .all())
 
-    agg = {}
+    # Split aggregation: main vs Extra Tooling
+    agg_main = {}
+    agg_extra = {}
+
     for r in flagged:
+        is_extra = (r.category or '').strip().lower() == 'extra tooling'
+        target = agg_extra if is_extra else agg_main
+
         key = (r.item_number, r.item_name)
-        bucket = agg.setdefault(key, {"Missing": 0, "Red Tag": 0})
+        bucket = target.setdefault(key, {"Missing": 0, "Red Tag": 0})
         if r.status in bucket:
             try:
                 bucket[r.status] += int(r.quantity or 0)
             except Exception:
                 pass
 
-    rows = []
-    for (item_number, item_name), counts in agg.items():
-        rows.append({
-            "item_name": item_name,
-            "item_number": item_number,
-            "missing_qty": counts.get("Missing", 0),
-            "redtag_qty": counts.get("Red Tag", 0),
-        })
+    def to_rows(agg_dict):
+        rows = []
+        for (item_number, item_name), counts in agg_dict.items():
+            rows.append({
+                "item_name": item_name,
+                "item_number": item_number,
+                "missing_qty": counts.get("Missing", 0),
+                "redtag_qty": counts.get("Red Tag", 0),
+            })
+        rows.sort(key=lambda x: x["item_name"].lower())
+        return rows
 
-    rows.sort(key=lambda x: x["item_name"].lower())
+    rows_main = to_rows(agg_main)
+    rows_extra = to_rows(agg_extra)
 
-    return render_template('pull_list.html', trailer=trailer, rows=rows)
+    return render_template(
+        'pull_list.html',
+        trailer=trailer,
+        rows=rows_main,
+        extra_rows=rows_extra
+    )
 
 @inventory_bp.route('/invoice/<int:invoice_id>/download')
 def download_invoice(invoice_id):
