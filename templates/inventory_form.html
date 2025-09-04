@@ -5,7 +5,7 @@
 <style>
   :root{
     --fg:#111827; --muted:#6b7280; --border:#e5e7eb; --bg:#ffffff; --bg-soft:#f9fafb;
-    --primary:#2563eb; --primary-hover:#1d4ed8; --danger:#ef4444;
+    --primary:#2563eb; --primary-hover:#1d4ed8;
   }
   .wrap { background:var(--bg); border:1px solid var(--border); border-radius:12px; }
   .wrap .hd { padding:16px 18px; border-bottom:1px solid var(--border); }
@@ -15,12 +15,13 @@
   .meta div { color:var(--fg); font-size:15px; }
   @media (max-width:900px){ .meta { grid-template-columns:1fr; } }
   .muted { color:var(--muted); }
+
   .accordion { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
   .acc-item + .acc-item { border-top:1px solid var(--border); }
   .acc-header{
     width:100%; background:var(--bg-soft); padding:14px;
     display:flex; align-items:center; justify-content:space-between;
-    border:none; cursor:pointer; text-align:left; font-size:16px; -webkit-tap-highlight-color: transparent;
+    border:none; cursor:pointer; text-align:left; font-size:16px;
   }
   .acc-title { font-weight:600; color:var(--fg); display:flex; align-items:center; gap:8px; }
   .acc-title .caret { display:inline-block; transition:transform .2s ease; }
@@ -28,39 +29,43 @@
   .acc-count { color:var(--muted); font-size:14px }
   .acc-body { display:none; background:#fff; }
   .acc-item.open .acc-body { display:block; }
+
   .item { padding:14px; border-top:1px dashed var(--border); }
   .item:first-child { border-top:none; }
+
   .row1 { display:grid; gap:10px; grid-template-columns:1fr; }
   .label { font-size:13px; color:var(--muted); margin-bottom:4px; }
   .val { font-size:16px; color:var(--fg); }
-  .qty input[type="number"]{
-    width:180px; max-width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:var(--bg-soft); font-size:16px;
+
+  .row2 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:12px; margin-top:12px; }
+  @media (max-width:800px){ .row2 { grid-template-columns:1fr; } }
+
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .field input[type="number"],
+  .field input[type="text"],
+  .field select {
+    padding:10px 12px; border:1px solid var(--border); border-radius:10px; font-size:16px; background:#fff;
   }
-  .row2 { display:flex; flex-direction:column; gap:12px; margin-top:12px; }
-  .chk { display:flex; align-items:center; gap:10px; font-size:16px; color:var(--fg); padding:8px 0; }
-  .chk input[type="checkbox"]{ width:22px; height:22px; min-width:22px; min-height:22px; accent-color: var(--primary); }
-  .note { display:none; margin-left:32px; }
-  .note textarea{
-    width:100%; min-height:72px; margin-top:6px; padding:12px 14px; border:1px solid var(--border); border-radius:10px; font-size:16px; resize:vertical;
-  }
-  /* small inline qty inputs shown when Missing/Red Tag are checked */
-  .qtyline { display:none; margin-left:32px; margin-top:6px; display:flex; gap:10px; align-items:center; }
-  .qtyline input[type="number"]{ width:120px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; }
+
   .controls-top { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:16px 0 8px; }
   .controls-top h3 { margin:0; color:var(--fg); font-size:18px; }
+
   .btn { appearance:none; border:none; border-radius:10px; padding:12px 16px; background:var(--primary); color:#fff; cursor:pointer; font-size:16px; }
   .btn:hover { background:var(--primary-hover); }
   .btn.ghost { background:#fff; color:var(--fg); border:1px solid var(--border); }
   .btn.muted { background:#6b7280; }
+
   .name-field { margin:12px 0 6px; }
   .name-field input { width:320px; max-width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:10px; font-size:16px; }
   .hint { color:var(--muted); font-size:13px; margin-top:4px; }
+
   .actions-sticky{
     position:sticky; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--border);
     padding:10px 12px; display:flex; gap:10px; justify-content:space-between; z-index:10;
     border-bottom-left-radius:12px; border-bottom-right-radius:12px;
   }
   .actions-sticky .btn { flex:1; text-align:center; }
+
   #expandAll, #collapseAll { padding:10px 14px; font-size:16px; }
   @media (min-width:1100px){ .wrap .bd { padding:16px 18px 100px; } }
 </style>
@@ -122,44 +127,32 @@
                       <div class="label">Item #</div>
                       <div class="val">#{{ num }}</div>
                     </div>
-                    <div class="qty">
-                      <div class="label">Quantity (expected)</div>
-                      <input type="number" name="{{ num }}_quantity" value="{{ expected }}" readonly title="Quantity is fixed for this list" inputmode="numeric" {% if read_only %}tabindex="-1"{% endif %} />
+                    <div>
+                      <div class="label">Expected</div>
+                      <div class="val">{{ expected }}</div>
                     </div>
                   </div>
 
                   <div class="row2">
-                    <!-- Missing -->
-                    <label class="chk">
-                      <input type="checkbox" name="{{ num }}_status_missing" value="Missing" {% if read_only %}disabled{% endif %} />
-                      Missing
-                    </label>
-                    <div class="qtyline q-missing">
-                      <label class="label" style="margin:0;">Missing Qty</label>
-                      <input type="number" name="{{ num }}_qty_missing" min="0" value="0" {% if read_only %}readonly tabindex="-1"{% endif %} />
-                    </div>
-                    <div class="note note-missing">
-                      <textarea name="{{ num }}_note_missing" placeholder="Missing notes…" {% if read_only %}readonly{% endif %}></textarea>
+                    <div class="field">
+                      <label class="label">Status</label>
+                      <select name="{{ num }}_status" {% if read_only %}disabled{% endif %} required>
+                        <option value="">-- Select --</option>
+                        <option value="Complete">Complete</option>
+                        <option value="Missing">Missing</option>
+                        <option value="Red Tag">Red Tag</option>
+                      </select>
                     </div>
 
-                    <!-- Red Tag -->
-                    <label class="chk">
-                      <input type="checkbox" name="{{ num }}_status_redtag" value="Red Tag" {% if read_only %}disabled{% endif %} />
-                      Red Tag
-                    </label>
-                    <div class="qtyline q-redtag">
-                      <label class="label" style="margin:0;">Red Tag Qty</label>
-                      <input type="number" name="{{ num }}_qty_redtag" min="0" value="0" {% if read_only %}readonly tabindex="-1"{% endif %} />
-                    </div>
-                    <div class="note note-redtag">
-                      <textarea name="{{ num }}_note_redtag" placeholder="Red tag notes…" {% if read_only %}readonly{% endif %}></textarea>
+                    <div class="field">
+                      <label class="label">Quantity</label>
+                      <input type="number" name="{{ num }}_quantity" min="0" value="{{ expected }}" {% if read_only %}readonly tabindex="-1"{% endif %} />
                     </div>
 
-                    <!-- Complete -->
-                    <label class="chk">
-                      <input type="checkbox" name="{{ num }}_status_complete" value="Complete" {% if read_only %}disabled{% endif %} />
-                      Complete
-                    </label>
+                    <div class="field">
+                      <label class="label">Note</label>
+                      <input type="text" name="{{ num }}_note" placeholder="Optional note" {% if read_only %}readonly{% endif %} />
+                    </div>
 
                     <input type="hidden" name="{{ num }}_item_name" value="{{ name }}">
                     <input type="hidden" name="{{ num }}_category" value="{{ category }}">
@@ -191,47 +184,36 @@
                       <div class="label">Item #</div>
                       <div class="val">#{{ item.item_number }}</div>
                     </div>
-                    <div class="qty">
-                      <div class="label">Quantity (expected)</div>
-                      <input type="number" name="cb_{{ loop.index0 }}_quantity" value="{{ item.quantity }}" {% if read_only %}readonly tabindex="-1"{% endif %} inputmode="numeric" />
+                    <div>
+                      <div class="label">Expected</div>
+                      <div class="val">{{ item.quantity }}</div>
                     </div>
                   </div>
 
                   <div class="row2">
-                    <!-- Missing -->
-                    <label class="chk">
-                      <input type="checkbox" name="cb_{{ loop.index0 }}_missing" value="Missing" {% if read_only %}disabled{% endif %} />
-                      Missing
-                    </label>
-                    <div class="qtyline q-missing">
-                      <label class="label" style="margin:0;">Missing Qty</label>
-                      <input type="number" name="cb_{{ loop.index0 }}_qty_missing" min="0" value="0" {% if read_only %}readonly tabindex="-1"{% endif %} />
-                    </div>
-                    <div class="note note-missing">
-                      <textarea name="cb_{{ loop.index0 }}_note_missing" placeholder="Missing notes…" {% if read_only %}readonly{% endif %}></textarea>
+                    <div class="field">
+                      <label class="label">Status</label>
+                      <!-- NOTE: name is extra_{i}_status to match backend parsing -->
+                      <select name="extra_{% raw %}{{{% endraw %} loop.index0 {% raw %}}}{% endraw %}_status" {% if read_only %}disabled{% endif %} required>
+                        <option value="">-- Select --</option>
+                        <option value="Complete">Complete</option>
+                        <option value="Missing">Missing</option>
+                        <option value="Red Tag">Red Tag</option>
+                      </select>
                     </div>
 
-                    <!-- Red Tag -->
-                    <label class="chk">
-                      <input type="checkbox" name="cb_{{ loop.index0 }}_redtag" value="Red Tag" {% if read_only %}disabled{% endif %} />
-                      Red Tag
-                    </label>
-                    <div class="qtyline q-redtag">
-                      <label class="label" style="margin:0;">Red Tag Qty</label>
-                      <input type="number" name="cb_{{ loop.index0 }}_qty_redtag" min="0" value="0" {% if read_only %}readonly tabindex="-1"{% endif %} />
-                    </div>
-                    <div class="note note-redtag">
-                      <textarea name="cb_{{ loop.index0 }}_note_redtag" placeholder="Red tag notes…" {% if read_only %}readonly{% endif %}></textarea>
+                    <div class="field">
+                      <label class="label">Quantity</label>
+                      <input type="number" name="cb_{% raw %}{{{% endraw %} loop.index0 {% raw %}}}{% endraw %}_quantity" min="0" value="{{ item.quantity }}" {% if read_only %}readonly tabindex="-1{% endif %}" />
                     </div>
 
-                    <!-- Complete -->
-                    <label class="chk">
-                      <input type="checkbox" name="cb_{{ loop.index0 }}_complete" value="Complete" {% if read_only %}disabled{% endif %} />
-                      Complete
-                    </label>
+                    <div class="field">
+                      <label class="label">Note</label>
+                      <input type="text" name="cb_{% raw %}{{{% endraw %} loop.index0 {% raw %}}}{% endraw %}_note" placeholder="Optional note" {% if read_only %}readonly{% endif %} />
+                    </div>
 
-                    <input type="hidden" name="cb_{{ loop.index0 }}_item_name" value="{{ item.item_name }}">
-                    <input type="hidden" name="cb_{{ loop.index0 }}_item_number" value="{{ item.item_number }}">
+                    <input type="hidden" name="cb_{% raw %}{{{% endraw %} loop.index0 {% raw %}}}{% endraw %}_item_name" value="{{ item.item_name }}">
+                    <input type="hidden" name="cb_{% raw %}{{{% endraw %} loop.index0 {% raw %}}}{% endraw %}_item_number" value="{{ item.item_number }}">
                   </div>
                 </div>
               {% endfor %}
@@ -282,33 +264,6 @@
     }
     if (expandAllBtn) expandAllBtn.addEventListener('click', function(){ setAll(true); });
     if (collapseAllBtn) collapseAllBtn.addEventListener('click', function(){ setAll(false); });
-
-    function wireItem(itemEl){
-      const missing = itemEl.querySelector('input[name$="_status_missing"]') || itemEl.querySelector('input[name^="cb_"][name$="_missing"]');
-      const redtag  = itemEl.querySelector('input[name$="_status_redtag"]')  || itemEl.querySelector('input[name^="cb_"][name$="_redtag"]');
-      const noteMissing = itemEl.querySelector('.note-missing');
-      const noteRedtag  = itemEl.querySelector('.note-redtag');
-      const qtyMissing  = itemEl.querySelector('.q-missing');
-      const qtyRedtag   = itemEl.querySelector('.q-redtag');
-
-      if (missing) {
-        const syncMissing = ()=>{
-          if(noteMissing) noteMissing.style.display = missing.checked ? 'block' : 'none';
-          if(qtyMissing)  qtyMissing.style.display  = missing.checked ? 'flex' : 'none';
-        };
-        missing.addEventListener('change', syncMissing);
-        syncMissing();
-      }
-      if (redtag) {
-        const syncRed = ()=>{
-          if(noteRedtag) noteRedtag.style.display = redtag.checked ? 'block' : 'none';
-          if(qtyRedtag)  qtyRedtag.style.display  = redtag.checked ? 'flex' : 'none';
-        };
-        redtag.addEventListener('change', syncRed);
-        syncRed();
-      }
-    }
-    document.querySelectorAll('.item').forEach(wireItem);
   });
 </script>
 {% endblock %}
