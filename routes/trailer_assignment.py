@@ -172,47 +172,89 @@ def trailer_update(trailer_id):
     # Fresh submission: clear previous responses
     InventoryResponse.query.filter_by(trailer_id=trailer.id).delete()
 
-    def to_int(val):
+    f = request.form.get
+
+    def to_int_or_zero(v):
         try:
-            return int(str(val).strip())
+            return int(v)
         except Exception:
             return 0
 
-    f = request.form.get
+    # ----- DEBUG: log posted keys (first 25)
+    try:
+        posted_keys = list(request.form.keys())
+        current_app.logger.info(
+            "[SUBMIT] trailer=%s posted_keys_count=%d sample=%s",
+            trailer.id, len(posted_keys), posted_keys[:25]
+        )
+    except Exception:
+        pass
+
+    # Resolve tooling list
+    list_name = (trailer.tooling_list_name or trailer.inventory_type or "").strip()
+    tooling_list = get_tooling_list(list_name) or []
+
+    # Build candidate bases from BOTH hidden fields and known item numbers
+    bases = set()
+    for key in request.form.keys():
+        if key.endswith('_item_name'):
+            bases.add(key[:-len('_item_name')])
+    for item in tooling_list:
+        num = item.get('Item Number') or item.get('itemNumber') or ''
+        if num:
+            bases.add(str(num))
+
+    # ----- DEBUG: base count
+    try:
+        current_app.logger.info("[SUBMIT] trailer=%s base_candidates=%d", trailer.id, len(bases))
+    except Exception:
+        pass
 
     responses = []
     flagged_items = []
 
-    # --------- MAIN INVENTORY: derive items from posted keys ----------
-    # We rendered a hidden input per line:  <input type="hidden" name="{{ num }}_item_name" value="{{ name }}">
-    # Use those to enumerate submitted lines robustly (works even if item numbers have spaces or symbols).
-    base_keys = set()
-    for key in request.form.keys():
-        if key.endswith('_item_name'):
-            base = key[:-len('_item_name')]
-            base_keys.add(base)
+    # MAIN inventory
+    for base in bases:
+        # Prefer names coming from the form when possible
+        item_name = f(f"{base}_item_name")
+        category  = f(f"{base}_category")
 
-    for base in base_keys:
-        item_number = base                      # base IS the item number string used in the template
-        item_name   = f(f"{base}_item_name") or ''
-        category    = f(f"{base}_category") or 'General'
+        # If hidden fields missing, try to look up from tooling_list
+        if item_name is None or category is None:
+            for it in tooling_list:
+                if str(it.get('Item Number') or it.get('itemNumber') or '') == base:
+                    item_name = item_name or it.get('Item Name') or it.get('itemName') or ''
+                    category  = category  or it.get('Category')  or it.get('category')  or 'General'
+                    break
 
-        # Checkboxes (or select) – but we only create rows when qty > 0
+        item_name = item_name or ''
+        category  = category or 'General'
+
+        # Checkbox flags
         is_missing  = bool(f(f"{base}_status_missing"))
         is_redtag   = bool(f(f"{base}_status_redtag"))
         is_complete = bool(f(f"{base}_status_complete"))
 
-        miss_qty = to_int(f(f"{base}_qty_missing"))
-        red_qty  = to_int(f(f"{base}_qty_redtag"))
+        # Numeric quantities (exactly as entered)
+        miss_qty = to_int_or_zero(f(f"{base}_qty_missing") or "0")
+        red_qty  = to_int_or_zero(f(f"{base}_qty_redtag")  or "0")
 
-        # Record only if qty > 0 so pull-list reflects the user-entered numbers
+        # DEBUG per-base
+        try:
+            current_app.logger.debug(
+                "[SUBMIT] base=%r missing=%s miss_qty=%s redtag=%s red_qty=%s",
+                base, is_missing, miss_qty, is_redtag, red_qty
+            )
+        except Exception:
+            pass
+
         if is_missing and miss_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
-                item_number=str(item_number),
+                item_number=str(base),
                 item_name=item_name,
                 status='Missing',
-                note='',            # your UI uses qty text/number; leave note blank unless you add a text box
+                note='',
                 quantity=miss_qty,
                 category=category
             )
@@ -222,7 +264,7 @@ def trailer_update(trailer_id):
         if is_redtag and red_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
-                item_number=str(item_number),
+                item_number=str(base),
                 item_name=item_name,
                 status='Red Tag',
                 note='',
@@ -235,7 +277,7 @@ def trailer_update(trailer_id):
         if is_complete:
             responses.append(InventoryResponse(
                 trailer_id=trailer.id,
-                item_number=str(item_number),
+                item_number=str(base),
                 item_name=item_name,
                 status='Complete',
                 note='',
@@ -243,7 +285,7 @@ def trailer_update(trailer_id):
                 category=category
             ))
 
-    # --------- EXTRA TOOLING (credit-back) ----------
+    # EXTRA tooling (credit-back)
     credit_back = trailer.extra_tooling or []
     extra_responses = []
     for i, item in enumerate(credit_back):
@@ -254,8 +296,16 @@ def trailer_update(trailer_id):
         cb_redtag   = bool(f(f"cb_{i}_redtag"))
         cb_complete = bool(f(f"cb_{i}_complete"))
 
-        miss_qty = to_int(f(f"cb_{i}_qty_missing"))
-        red_qty  = to_int(f(f"cb_{i}_qty_redtag"))
+        miss_qty = to_int_or_zero(f(f"cb_{i}_qty_missing") or "0")
+        red_qty  = to_int_or_zero(f(f"cb_{i}_qty_redtag")  or "0")
+
+        try:
+            current_app.logger.debug(
+                "[SUBMIT][CB] idx=%d num=%r missing=%s miss_qty=%s redtag=%s red_qty=%s",
+                i, item_number, cb_missing, miss_qty, cb_redtag, red_qty
+            )
+        except Exception:
+            pass
 
         if cb_missing and miss_qty > 0:
             r = InventoryResponse(
@@ -299,7 +349,16 @@ def trailer_update(trailer_id):
     if extra_responses:
         db.session.add_all(extra_responses)
 
-    # Invoice DB row (file path optional)
+    # DEBUG: totals written
+    try:
+        current_app.logger.info(
+            "[SUBMIT] trailer=%s wrote main=%d extra=%d flagged=%d",
+            trailer.id, len(responses), len(extra_responses), len(flagged_items)
+        )
+    except Exception:
+        pass
+
+    # Invoice row
     if flagged_items:
         try:
             invoice_path = generate_invoice(trailer.id, flagged_items) or ""
