@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from models import Trailer, InventoryResponse, Invoice
 from database import db
 from utils.tooling_lists import tooling_lists
-from utils.invoice_generator import generate_invoice  # may return PDF or HTML path
+from utils.invoice_generator import generate_invoice
 
 trailer_assignment_bp = Blueprint('trailer_assignment', __name__)
 
@@ -23,9 +23,7 @@ def assign_trailer():
         foreman_name   = (request.form.get('foreman_name') or '').strip() or None
         external_id    = (request.form.get('trailer_id') or '').strip() or None
 
-        ln25_val = (request.form.get('ln_25s') or
-                    request.form.get('lN-25s') or
-                    request.form.get('LN_25') or '').strip() or None
+        ln25_val = (request.form.get('ln_25s') or request.form.get('lN-25s') or request.form.get('LN_25') or '').strip() or None
 
         extra_tooling_data = []
         if request.form.get('enable_credit_back'):
@@ -142,7 +140,7 @@ def update_trailer_post(trailer_id):
     return redirect(f'/trailer/{t.id}')
 
 # ----------------------------------------------------------------------------- 
-# UPDATE (submission) — build rows from posted fields only
+# UPDATE (submission) — tolerant field names & bases
 # -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update', methods=['POST'], strict_slashes=False)
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update/', methods=['POST'], strict_slashes=False)
@@ -177,33 +175,50 @@ def trailer_update(trailer_id):
 
     f = request.form.get
 
-    def to_pos_int_or_zero(v: str):
-        """Numbers only; blank/non-numeric -> 0."""
+    def to_pos_int_or_zero(v):
         try:
             n = int(str(v).strip())
             return n if n > 0 else 0
         except Exception:
             return 0
 
-    # -------- LOG WHAT ARRIVED --------
+    def qty_variants(form, base, kind):
+        """kind is 'missing' or 'redtag'. Accept several naming styles."""
+        candidates = [
+            f"{base}_qty_{kind}",
+            f"{base}_{kind}_qty",
+            f"{base}_{kind}",
+        ]
+        for key in candidates:
+            val = form.get(key)
+            if val is not None and str(val).strip() != "":
+                return to_pos_int_or_zero(val)
+        return 0
+
+    # -------- discover bases --------
+    base_keys = set()
+    for key in request.form.keys():
+        if key.endswith('_item_name'):
+            base_keys.add(key[:-len('_item_name')])
+
+    # Fallback: build bases from qty fields if hidden inputs are absent
+    if not base_keys:
+        for key in request.form.keys():
+            if key.endswith('_qty_missing') or key.endswith('_missing_qty') or key.endswith('_missing'):
+                base_keys.add(key.replace('_qty_missing', '').replace('_missing_qty', '').removesuffix('_missing'))
+            if key.endswith('_qty_redtag') or key.endswith('_redtag_qty') or key.endswith('_redtag'):
+                base = key.replace('_qty_redtag', '').replace('_redtag_qty', '').removesuffix('_redtag')
+                base_keys.add(base)
+
     try:
-        current_app.logger.info("[SUBMIT] trailer=%s keys=%d", trailer.id, len(request.form.keys()))
-        sample_keys = list(request.form.keys())[:25]
-        current_app.logger.info("[SUBMIT] sample keys: %s", sample_keys)
+        current_app.logger.info("[SUBMIT] trailer=%s bases=%d keys=%d", trailer.id, len(base_keys), len(request.form.keys()))
     except Exception:
         pass
 
     responses = []
     flagged_items = []
 
-    # -------- MAIN INVENTORY from *_item_name bases --------
-    base_keys = set()
-    for key in request.form.keys():
-        if key.endswith('_item_name'):
-            base_keys.add(key[:-len('_item_name')])
-
-    current_app.logger.info("[SUBMIT] found %d base items from _item_name", len(base_keys))
-
+    # -------- MAIN INVENTORY --------
     for base in base_keys:
         item_number = base
         item_name   = f(f"{base}_item_name") or ''
@@ -213,10 +228,9 @@ def trailer_update(trailer_id):
         is_redtag   = bool(f(f"{base}_status_redtag"))
         is_complete = bool(f(f"{base}_status_complete"))
 
-        miss_qty = to_pos_int_or_zero(f(f"{base}_qty_missing") or "")
-        red_qty  = to_pos_int_or_zero(f(f"{base}_qty_redtag")  or "")
+        miss_qty = qty_variants(request.form, base, 'missing')
+        red_qty  = qty_variants(request.form, base, 'redtag')
 
-        # Consider a row if (checkbox checked) OR (qty > 0)
         if (is_missing or miss_qty > 0) and miss_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
@@ -264,8 +278,20 @@ def trailer_update(trailer_id):
         cb_redtag   = bool(f(f"cb_{i}_redtag"))
         cb_complete = bool(f(f"cb_{i}_complete"))
 
-        miss_qty = to_pos_int_or_zero(f(f"cb_{i}_qty_missing") or "")
-        red_qty  = to_pos_int_or_zero(f(f"cb_{i}_qty_redtag")  or "")
+        # variants: cb_i_qty_missing / cb_i_missing_qty / cb_i_missing
+        miss_qty = 0
+        for key in (f"cb_{i}_qty_missing", f"cb_{i}_missing_qty", f"cb_{i}_missing"):
+            val = f(key)
+            if val is not None and str(val).strip() != "":
+                miss_qty = to_pos_int_or_zero(val)
+                break
+
+        red_qty = 0
+        for key in (f"cb_{i}_qty_redtag", f"cb_{i}_redtag_qty", f"cb_{i}_redtag"):
+            val = f(key)
+            if val is not None and str(val).strip() != "":
+                red_qty = to_pos_int_or_zero(val)
+                break
 
         if (cb_missing or miss_qty > 0) and miss_qty > 0:
             r = InventoryResponse(
@@ -304,12 +330,14 @@ def trailer_update(trailer_id):
                 category='Extra Tooling'
             ))
 
-    current_app.logger.info("[SUBMIT] will save %d responses; flagged=%d", len(responses), len(flagged_items))
+    try:
+        current_app.logger.info("[SUBMIT] saving responses=%d flagged=%d", len(responses), len(flagged_items))
+    except Exception:
+        pass
 
     if responses:
         db.session.add_all(responses)
 
-    # Invoice row (file optional)
     if flagged_items:
         try:
             invoice_path = generate_invoice(trailer.id, flagged_items) or ""
