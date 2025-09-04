@@ -140,19 +140,19 @@ def update_trailer_post(trailer_id):
     return redirect(f'/trailer/{t.id}')
 
 # ----------------------------------------------------------------------------- 
-# UPDATE (submission) — tolerant field names & bases
+# UPDATE (submission) — use checkbox + text note fields as the per-status qty
 # -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update', methods=['POST'], strict_slashes=False)
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update/', methods=['POST'], strict_slashes=False)
 def trailer_update(trailer_id):
     trailer = Trailer.query.get_or_404(trailer_id)
 
-    # Who submitted
+    # Save who submitted (your form uses "assigned_user")
     submitted_by = (request.form.get('submitted_by') or request.form.get('assigned_user') or '').strip()
     if submitted_by:
         trailer.assigned_user = submitted_by
 
-    # LN-25
+    # LN-25 passthrough (if present anywhere)
     ln25_val = (request.form.get('ln_25s') or request.form.get('lN-25s') or request.form.get('LN_25') or '').strip()
     if ln25_val:
         for attr in ('ln_25s', 'lN_25s', 'LN_25'):
@@ -160,7 +160,7 @@ def trailer_update(trailer_id):
                 setattr(trailer, attr, ln25_val)
                 break
 
-    # Optional meta
+    # Optional meta passthroughs
     if 'location' in request.form:
         trailer.location = (request.form.get('location') or trailer.location or '').strip()
     if 'status' in request.form:
@@ -175,50 +175,28 @@ def trailer_update(trailer_id):
 
     f = request.form.get
 
-    def to_pos_int_or_zero(v):
+    def parse_qty_from_text(txt):
+        """Pull a positive integer from a free-text input. Non-digits are ignored."""
+        if txt is None:
+            return 0
+        s = ''.join(ch for ch in str(txt) if ch.isdigit())
+        if not s:
+            return 0
         try:
-            n = int(str(v).strip())
+            n = int(s)
             return n if n > 0 else 0
         except Exception:
             return 0
 
-    def qty_variants(form, base, kind):
-        """kind is 'missing' or 'redtag'. Accept several naming styles."""
-        candidates = [
-            f"{base}_qty_{kind}",
-            f"{base}_{kind}_qty",
-            f"{base}_{kind}",
-        ]
-        for key in candidates:
-            val = form.get(key)
-            if val is not None and str(val).strip() != "":
-                return to_pos_int_or_zero(val)
-        return 0
+    responses = []
+    flagged = []
 
-    # -------- discover bases --------
+    # -------- MAIN INVENTORY (discover lines via the hidden *_item_name fields) --------
     base_keys = set()
     for key in request.form.keys():
         if key.endswith('_item_name'):
             base_keys.add(key[:-len('_item_name')])
 
-    # Fallback: build bases from qty fields if hidden inputs are absent
-    if not base_keys:
-        for key in request.form.keys():
-            if key.endswith('_qty_missing') or key.endswith('_missing_qty') or key.endswith('_missing'):
-                base_keys.add(key.replace('_qty_missing', '').replace('_missing_qty', '').removesuffix('_missing'))
-            if key.endswith('_qty_redtag') or key.endswith('_redtag_qty') or key.endswith('_redtag'):
-                base = key.replace('_qty_redtag', '').replace('_redtag_qty', '').removesuffix('_redtag')
-                base_keys.add(base)
-
-    try:
-        current_app.logger.info("[SUBMIT] trailer=%s bases=%d keys=%d", trailer.id, len(base_keys), len(request.form.keys()))
-    except Exception:
-        pass
-
-    responses = []
-    flagged_items = []
-
-    # -------- MAIN INVENTORY --------
     for base in base_keys:
         item_number = base
         item_name   = f(f"{base}_item_name") or ''
@@ -228,34 +206,33 @@ def trailer_update(trailer_id):
         is_redtag   = bool(f(f"{base}_status_redtag"))
         is_complete = bool(f(f"{base}_status_complete"))
 
-        miss_qty = qty_variants(request.form, base, 'missing')
-        red_qty  = qty_variants(request.form, base, 'redtag')
+        # Text inputs carry the user-entered counts
+        miss_qty = parse_qty_from_text(f(f"{base}_note_missing"))
+        red_qty  = parse_qty_from_text(f(f"{base}_note_redtag"))
 
-        if (is_missing or miss_qty > 0) and miss_qty > 0:
+        if is_missing and miss_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Missing',
-                note='',
+                note=f(f"{base}_note_missing") or "",   # keep original text in case you want it later
                 quantity=miss_qty,
                 category=category
             )
-            responses.append(r)
-            flagged_items.append(r)
+            responses.append(r); flagged.append(r)
 
-        if (is_redtag or red_qty > 0) and red_qty > 0:
+        if is_redtag and red_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Red Tag',
-                note='',
+                note=f(f"{base}_note_redtag") or "",
                 quantity=red_qty,
                 category=category
             )
-            responses.append(r)
-            flagged_items.append(r)
+            responses.append(r); flagged.append(r)
 
         if is_complete:
             responses.append(InventoryResponse(
@@ -268,56 +245,49 @@ def trailer_update(trailer_id):
                 category=category
             ))
 
-    # -------- EXTRA TOOLING --------
-    credit_back = trailer.extra_tooling or []
-    for i, item in enumerate(credit_back):
-        item_name   = item.get('item_name') or item.get('name') or ''
-        item_number = item.get('item_number') or item.get('number') or ''
+    # -------- EXTRA TOOLING (use posted hidden fields for each cb_* line) --------
+    # We look for any keys like "cb_{i}_item_name" to discover indices.
+    cb_indices = set()
+    for key in request.form.keys():
+        if key.startswith('cb_') and key.endswith('_item_name'):
+            idx = key[len('cb_'):-len('_item_name')]
+            if idx.isdigit():
+                cb_indices.add(int(idx))
+
+    for i in sorted(cb_indices):
+        item_name   = f(f"cb_{i}_item_name") or ''
+        item_number = f(f"cb_{i}_item_number") or ''
 
         cb_missing  = bool(f(f"cb_{i}_missing"))
         cb_redtag   = bool(f(f"cb_{i}_redtag"))
         cb_complete = bool(f(f"cb_{i}_complete"))
 
-        # variants: cb_i_qty_missing / cb_i_missing_qty / cb_i_missing
-        miss_qty = 0
-        for key in (f"cb_{i}_qty_missing", f"cb_{i}_missing_qty", f"cb_{i}_missing"):
-            val = f(key)
-            if val is not None and str(val).strip() != "":
-                miss_qty = to_pos_int_or_zero(val)
-                break
+        miss_qty = parse_qty_from_text(f(f"cb_{i}_note_missing"))
+        red_qty  = parse_qty_from_text(f(f"cb_{i}_note_redtag"))
 
-        red_qty = 0
-        for key in (f"cb_{i}_qty_redtag", f"cb_{i}_redtag_qty", f"cb_{i}_redtag"):
-            val = f(key)
-            if val is not None and str(val).strip() != "":
-                red_qty = to_pos_int_or_zero(val)
-                break
-
-        if (cb_missing or miss_qty > 0) and miss_qty > 0:
+        if cb_missing and miss_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Missing',
-                note='',
+                note=f(f"cb_{i}_note_missing") or "",
                 quantity=miss_qty,
                 category='Extra Tooling'
             )
-            responses.append(r)
-            flagged_items.append(r)
+            responses.append(r); flagged.append(r)
 
-        if (cb_redtag or red_qty > 0) and red_qty > 0:
+        if cb_redtag and red_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Red Tag',
-                note='',
+                note=f(f"cb_{i}_note_redtag") or "",
                 quantity=red_qty,
                 category='Extra Tooling'
             )
-            responses.append(r)
-            flagged_items.append(r)
+            responses.append(r); flagged.append(r)
 
         if cb_complete:
             responses.append(InventoryResponse(
@@ -330,17 +300,13 @@ def trailer_update(trailer_id):
                 category='Extra Tooling'
             ))
 
-    try:
-        current_app.logger.info("[SUBMIT] saving responses=%d flagged=%d", len(responses), len(flagged_items))
-    except Exception:
-        pass
-
     if responses:
         db.session.add_all(responses)
 
-    if flagged_items:
+    # Create an invoice record (file optional)
+    if flagged:
         try:
-            invoice_path = generate_invoice(trailer.id, flagged_items) or ""
+            invoice_path = generate_invoice(trailer.id, flagged) or ""
         except Exception:
             current_app.logger.exception("Invoice generation failed; proceeding without file.")
             invoice_path = ""
