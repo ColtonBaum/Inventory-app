@@ -159,6 +159,7 @@ def update_trailer_post(trailer_id):
 # -----------------------------------------------------------------------------
 # UPDATE (submission) — FULL inventory submission from inventory_form.html
 # Accept both /trailer/<id>/update and /trailer/<id>/update/
+# Reads per-status quantities so pull list shows what the user entered.
 # -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update', methods=['POST'], strict_slashes=False)
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update/', methods=['POST'], strict_slashes=False)
@@ -195,32 +196,27 @@ def trailer_update(trailer_id):
     list_name = (trailer.tooling_list_name or trailer.inventory_type or "").strip()
     tooling_list = get_tooling_list(list_name) or []
 
-    def to_int(val, default=0):
+    def to_int(val):
         try:
             return int(str(val).strip())
         except Exception:
-            return default
+            return 0
 
     def f(name, default=None):
         return request.form.get(name, default)
 
     responses = []
-    flagged_items = []  # for invoice: Missing/Red Tag
+    flagged_items = []  # for invoice/pull list: Missing or Red Tag
 
-    # Regular tooling items
+    # Regular tooling items — use per-status qty fields
     for item in tooling_list:
         item_number = item.get('Item Number') or item.get('itemNumber') or ''
         if not item_number:
             continue
         item_name   = item.get('Item Name')   or item.get('itemName')   or ''
         category    = item.get('Category')    or item.get('category')   or 'General'
-        expected_q  = item.get('Quantity')    or item.get('quantity')   or 0
 
-        # Quantity from form (fall back to expected)
-        posted_qty = f(f"{item_number}_quantity")
-        qty = to_int(posted_qty, default=to_int(expected_q, 0))
-
-        # Support both select and checkbox styles
+        # Status flags (supports select or checkboxes)
         statuses = []
         sel = (f(f"{item_number}_status") or '').strip()
         if sel in ('Missing', 'Red Tag', 'Complete'):
@@ -233,74 +229,119 @@ def trailer_update(trailer_id):
             if f(f"{item_number}_status_complete"):
                 statuses.append('Complete')
 
-        # Notes (support both specific and generic)
+        # Notes (specific + generic)
         note_missing  = f(f"{item_number}_note_missing", "") if 'Missing' in statuses else ""
         note_redtag   = f(f"{item_number}_note_redtag",  "") if 'Red Tag' in statuses else ""
         note_complete = f(f"{item_number}_note_complete", "") if 'Complete' in statuses else ""
         generic_note  = f(f"{item_number}_note", "")
 
-        for status in statuses:
-            note = generic_note
-            if status == 'Missing':
-                note = note_missing or generic_note
-            elif status == 'Red Tag':
-                note = note_redtag or generic_note
-            elif status == 'Complete':
-                note = note_complete or generic_note
+        # NEW: per-status quantities from form (default to 0)
+        miss_qty = to_int(f(f"{item_number}_qty_missing"))
+        red_qty  = to_int(f(f"{item_number}_qty_redtag"))
 
+        # Record rows only if the corresponding qty > 0 (so pull list reflects user input)
+        if 'Missing' in statuses and miss_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
                 item_number=str(item_number),
                 item_name=item_name,
-                status=status,
-                note=note or "",
-                quantity=qty,
+                status='Missing',
+                note=note_missing or generic_note,
+                quantity=miss_qty,
                 category=category
             )
             responses.append(r)
-            if status in ('Missing', 'Red Tag'):
-                flagged_items.append(r)
+            flagged_items.append(r)
 
-    # Extra tooling (credit-back) stored as dicts with item_name/item_number/quantity
+        if 'Red Tag' in statuses and red_qty > 0:
+            r = InventoryResponse(
+                trailer_id=trailer.id,
+                item_number=str(item_number),
+                item_name=item_name,
+                status='Red Tag',
+                note=note_redtag or generic_note,
+                quantity=red_qty,
+                category=category
+            )
+            responses.append(r)
+            flagged_items.append(r)
+
+        # Optional: record "Complete" with zero quantity (for history)
+        if 'Complete' in statuses:
+            r = InventoryResponse(
+                trailer_id=trailer.id,
+                item_number=str(item_number),
+                item_name=item_name,
+                status='Complete',
+                note=note_complete or generic_note,
+                quantity=0,
+                category=category
+            )
+            responses.append(r)
+
+    # Extra tooling (credit-back) — also per-status qty fields
     credit_back = trailer.extra_tooling or []
     extra_responses = []
     for i, item in enumerate(credit_back):
         item_name   = item.get('item_name') or item.get('name') or ''
         item_number = item.get('item_number') or item.get('number') or ''
-        expected_q  = item.get('quantity', 0)
 
-        qty_val = to_int(f(f"cb_{i}_quantity"), default=to_int(expected_q, 0))
-
-        # Support both checkbox and select styles
-        cb_missing  = f(f"cb_{i}_missing")
-        cb_redtag   = f(f"cb_{i}_redtag")
-        cb_complete = f(f"cb_{i}_complete")
+        # Status flags (select or checkboxes)
+        cb_missing  = bool(f(f"cb_{i}_missing"))
+        cb_redtag   = bool(f(f"cb_{i}_redtag"))
+        cb_complete = bool(f(f"cb_{i}_complete"))
         sel = (f(f"extra_{i}_status") or '').strip()
         if sel in ('Missing', 'Red Tag', 'Complete'):
-            if sel == 'Missing':
-                cb_missing = 'on'
-            elif sel == 'Red Tag':
-                cb_redtag = 'on'
-            elif sel == 'Complete':
-                cb_complete = 'on'
+            cb_missing = (sel == 'Missing')
+            cb_redtag  = (sel == 'Red Tag')
+            cb_complete = (sel == 'Complete')
 
-        def note_for(label):
-            return f(f"cb_{i}_note_{label}", "")
+        # Notes
+        note_m = f(f"cb_{i}_note_missing", "")
+        note_r = f(f"cb_{i}_note_redtag", "")
+        note_c = f(f"cb_{i}_note_complete", "")
 
-        for status, onflag in (('Missing', cb_missing), ('Red Tag', cb_redtag), ('Complete', cb_complete)):
-            if onflag:
-                r = InventoryResponse(
-                    trailer_id=trailer.id,
-                    item_number=str(item_number),
-                    item_name=item_name,
-                    status=status,
-                    note=note_for(status.lower().replace(' ', '')),
-                    quantity=qty_val,
-                    category='Extra Tooling'
-                )
-                extra_responses.append(r)
-                if status in ('Missing', 'Red Tag'):
-                    flagged_items.append(r)
+        # NEW: per-status qtys for extra tooling
+        miss_qty = to_int(f(f"cb_{i}_qty_missing"))
+        red_qty  = to_int(f(f"cb_{i}_qty_redtag"))
+
+        if cb_missing and miss_qty > 0:
+            r = InventoryResponse(
+                trailer_id=trailer.id,
+                item_number=str(item_number),
+                item_name=item_name,
+                status='Missing',
+                note=note_m,
+                quantity=miss_qty,
+                category='Extra Tooling'
+            )
+            extra_responses.append(r)
+            flagged_items.append(r)
+
+        if cb_redtag and red_qty > 0:
+            r = InventoryResponse(
+                trailer_id=trailer.id,
+                item_number=str(item_number),
+                item_name=item_name,
+                status='Red Tag',
+                note=note_r,
+                quantity=red_qty,
+                category='Extra Tooling'
+            )
+            extra_responses.append(r)
+            flagged_items.append(r)
+
+        if cb_complete:
+            r = InventoryResponse(
+                trailer_id=trailer.id,
+                item_number=str(item_number),
+                item_name=item_name,
+                status='Complete',
+                note=note_c,
+                quantity=0,
+                category='Extra Tooling'
+            )
+            extra_responses.append(r)
 
     if responses:
         db.session.add_all(responses)
