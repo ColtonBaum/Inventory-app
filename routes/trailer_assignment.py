@@ -3,34 +3,49 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from models import Trailer, InventoryResponse, Invoice
 from database import db
 from utils.tooling_lists import tooling_lists, get_tooling_list
-from utils.invoice_generator import generate_invoice  # keep import (even if it returns HTML path)
+from utils.invoice_generator import generate_invoice
+import re  # <-- for parsing integers out of free-text
 
 trailer_assignment_bp = Blueprint('trailer_assignment', __name__)
 
-# -----------------------------------------------------------------------------
-# CREATE / ASSIGN — show form and create a trailer
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------
+_int_re = re.compile(r"(-?\d+)")
+
+def parse_first_int(s, default=0):
+    """
+    Return the first integer found in a text string like '2 grinders'.
+    If none found, return default (0).
+    """
+    if not s:
+        return default
+    m = _int_re.search(str(s))
+    return int(m.group(1)) if m else default
+
+def f(form, name, default=None):
+    return form.get(name, default)
+
+# ---------------------------------------------------------------------
+# CREATE / ASSIGN
+# ---------------------------------------------------------------------
 @trailer_assignment_bp.route('/assign_trailer', methods=['GET', 'POST'], endpoint='assign_trailer')
 def assign_trailer():
     if request.method == 'POST':
-        # Required fields
         job_name     = (request.form.get('job_name') or '').strip()
         job_number   = (request.form.get('job_number') or '').strip()
         tooling_list = (request.form.get('tooling_list_name') or '').strip()
 
-        # Optional fields
         location       = (request.form.get('location') or '').strip()
         submitted_by   = (request.form.get('submitted_by') or '').strip()
         assigned_user  = (request.form.get('assigned_user') or submitted_by or '').strip() or None
         foreman_name   = (request.form.get('foreman_name') or '').strip() or None
-        external_id    = (request.form.get('trailer_id') or '').strip() or None  # external trailer ID
+        external_id    = (request.form.get('trailer_id') or '').strip() or None
 
-        # Capture LN-25 serials if provided (supports a few name variants from the UI)
         ln25_val = (request.form.get('ln_25s') or
                     request.form.get('lN-25s') or
                     request.form.get('LN_25') or '').strip() or None
 
-        # Optional: extra tooling credit-back items coming from dynamic rows
         extra_tooling_data = []
         if request.form.get('enable_credit_back'):
             raw        = request.form.to_dict(flat=False)
@@ -55,20 +70,18 @@ def assign_trailer():
                         'category': cat or 'Extra Tooling'
                     })
 
-        # Persist new trailer
         t = Trailer(
             trailer_id=external_id,
             job_name=job_name,
             job_number=job_number,
             location=location,
             tooling_list_name=tooling_list,
-            inventory_type=tooling_list,  # mirrored for compatibility
+            inventory_type=tooling_list,
             assigned_user=assigned_user,
             status='Pending',
             extra_tooling=extra_tooling_data or None,
             foreman_name=foreman_name
         )
-        # If model has an LN-25 field, save it
         if ln25_val:
             for attr in ('ln_25s', 'lN_25s', 'LN_25'):
                 if hasattr(t, attr):
@@ -81,19 +94,16 @@ def assign_trailer():
         flash('Trailer assigned.', 'success')
         return redirect(url_for('inventory.dashboard'))
 
-    # GET – render the form
-    list_options = list(tooling_lists.keys())  # e.g. ["Standard Trailer", "Semi Trailer", ...]
+    list_options = list(tooling_lists.keys())
     return render_template('assign_trailer.html', list_options=list_options)
 
-
-# -----------------------------------------------------------------------------
-# UPDATE (compat metadata) — POST /trailer/<id> from detail page (no inventory)
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# UPDATE (compat metadata)
+# ---------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>', methods=['POST'], strict_slashes=False)
 def update_trailer_post(trailer_id):
     t = Trailer.query.get_or_404(trailer_id)
 
-    # Read fields safely; ignore missing ones
     job_name        = (request.form.get('job_name') or '').strip() or t.job_name
     job_number      = (request.form.get('job_number') or '').strip() or t.job_number
     location        = (request.form.get('location') or '').strip() or t.location
@@ -105,7 +115,6 @@ def update_trailer_post(trailer_id):
     tooling_list    = (request.form.get('tooling_list_name') or '').strip() or t.tooling_list_name
     status          = (request.form.get('status') or '').strip() or t.status
 
-    # Optional LN-25
     ln25_val = (request.form.get('ln_25s') or request.form.get('lN-25s') or request.form.get('LN_25') or '').strip()
     if ln25_val:
         for attr in ('ln_25s', 'lN_25s', 'LN_25'):
@@ -113,7 +122,6 @@ def update_trailer_post(trailer_id):
                 setattr(t, attr, ln25_val)
                 break
 
-    # Optional: handle extra tooling rows if your form posts them
     extra_tooling_data = None
     if request.form.get('enable_credit_back'):
         raw        = request.form.to_dict(flat=False)
@@ -139,7 +147,6 @@ def update_trailer_post(trailer_id):
                 })
         extra_tooling_data = rows
 
-    # Apply & save
     t.job_name = job_name
     t.job_number = job_number
     t.location = location
@@ -155,71 +162,44 @@ def update_trailer_post(trailer_id):
     flash('Trailer updated.', 'success')
     return redirect(f'/trailer/{t.id}')
 
-
-# -----------------------------------------------------------------------------
-# UPDATE (submission) — FULL inventory submission from inventory_form.html
-# Accept both /trailer/<id>/update and /trailer/<id>/update/
-# Reads per-status text inputs so pull list shows what the user entered.
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# UPDATE (submission) — uses free-text fields for Missing/Red Tag with qty parsing
+# ---------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update', methods=['POST'], strict_slashes=False)
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update/', methods=['POST'], strict_slashes=False)
 def trailer_update(trailer_id):
     trailer = Trailer.query.get_or_404(trailer_id)
 
-    # Optional: person submitting the form
-    submitted_by = (request.form.get('submitted_by') or request.form.get('assigned_user') or '').strip()
+    submitted_by = (f(request.form, 'submitted_by') or f(request.form, 'assigned_user') or '').strip()
     if submitted_by:
         trailer.assigned_user = submitted_by
 
-    # LN-25 from form (if present)
-    ln25_val = (request.form.get('ln_25s') or request.form.get('lN-25s') or request.form.get('LN_25') or '').strip()
+    ln25_val = (f(request.form, 'ln_25s') or f(request.form, 'lN-25s') or f(request.form, 'LN_25') or '').strip()
     if ln25_val:
         for attr in ('ln_25s', 'lN_25s', 'LN_25'):
             if hasattr(trailer, attr):
                 setattr(trailer, attr, ln25_val)
                 break
 
-    # Basic meta fields (if present in your form)
     if 'location' in request.form:
-        trailer.location = (request.form.get('location') or trailer.location or '').strip()
+        trailer.location = (f(request.form, 'location') or trailer.location or '').strip()
     if 'status' in request.form:
-        trailer.status = (request.form.get('status') or trailer.status or 'Pending').strip()
+        trailer.status = (f(request.form, 'status') or trailer.status or 'Pending').strip()
     if 'job_name' in request.form:
-        trailer.job_name = (request.form.get('job_name') or trailer.job_name or '').strip()
+        trailer.job_name = (f(request.form, 'job_name') or trailer.job_name or '').strip()
     if 'job_number' in request.form:
-        trailer.job_number = (request.form.get('job_number') or trailer.job_number or '').strip()
+        trailer.job_number = (f(request.form, 'job_number') or trailer.job_number or '').strip()
 
-    # ---------- MAIN SUBMISSION ----------
-    # Clear existing responses for this trailer (fresh submission)
+    # fresh submission: wipe old responses
     InventoryResponse.query.filter_by(trailer_id=trailer.id).delete()
 
     list_name = (trailer.tooling_list_name or trailer.inventory_type or "").strip()
     tooling_list = get_tooling_list(list_name) or []
 
-    def to_int(val):
-        """
-        Accepts text inputs; returns an int if the text looks numeric,
-        otherwise 0. Also tolerates commas/spaces.
-        """
-        if val is None:
-            return 0
-        s = str(val).strip().replace(',', '')
-        if s == '':
-            return 0
-        try:
-            return int(s)
-        except Exception:
-            # last resort: pull out digits only (e.g. "12 pcs")
-            digits = ''.join(ch for ch in s if ch.isdigit())
-            return int(digits) if digits else 0
-
-    def f(name, default=None):
-        return request.form.get(name, default)
-
     responses = []
-    flagged_items = []  # for invoice/pull list: Missing or Red Tag
+    flagged_items = []
 
-    # Regular tooling items — use per-status text qty fields
+    # ---------- main inventory ----------
     for item in tooling_list:
         item_number = item.get('Item Number') or item.get('itemNumber') or ''
         if not item_number:
@@ -227,91 +207,74 @@ def trailer_update(trailer_id):
         item_name   = item.get('Item Name')   or item.get('itemName')   or ''
         category    = item.get('Category')    or item.get('category')   or 'General'
 
-        # Status flags (supports select or checkboxes)
-        statuses = []
-        sel = (f(f"{item_number}_status") or '').strip()
-        if sel in ('Missing', 'Red Tag', 'Complete'):
-            statuses.append(sel)
-        else:
-            if f(f"{item_number}_status_missing"):
-                statuses.append('Missing')
-            if f(f"{item_number}_status_redtag"):
-                statuses.append('Red Tag')
-            if f(f"{item_number}_status_complete"):
-                statuses.append('Complete')
+        # checkboxes
+        is_missing = bool(f(request.form, f"{item_number}_status_missing"))
+        is_redtag  = bool(f(request.form, f"{item_number}_status_redtag"))
+        is_complete= bool(f(request.form, f"{item_number}_status_complete"))
 
-        # Notes (specific + generic)
-        note_missing  = f(f"{item_number}_note_missing", "") if 'Missing' in statuses else ""
-        note_redtag   = f(f"{item_number}_note_redtag",  "") if 'Red Tag' in statuses else ""
-        note_complete = f(f"{item_number}_note_complete", "") if 'Complete' in statuses else ""
-        generic_note  = f(f"{item_number}_note", "")
+        # free-text fields user typed (e.g., "2 grinders")
+        miss_text = (f(request.form, f"{item_number}_qty_missing", "") or "").strip()
+        red_text  = (f(request.form, f"{item_number}_qty_redtag",  "") or "").strip()
 
-        # Per-status qty fields (TEXT inputs)
-        miss_qty = to_int(f(f"{item_number}_qty_missing"))
-        red_qty  = to_int(f(f"{item_number}_qty_redtag"))
+        # use first integer found for counts
+        miss_qty = parse_first_int(miss_text, default=0)
+        red_qty  = parse_first_int(red_text,  default=0)
 
-        if 'Missing' in statuses and miss_qty > 0:
+        # record rows only when checked AND qty>0, store the full text in note
+        if is_missing and miss_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Missing',
-                note=note_missing or generic_note,
-                quantity=miss_qty,
+                note=miss_text,            # keep what the user typed
+                quantity=miss_qty,         # numeric count for pull list
                 category=category
             )
             responses.append(r)
             flagged_items.append(r)
-            current_app.logger.debug(f"[SUBMIT] Missing: {item_number} x{miss_qty}")
 
-        if 'Red Tag' in statuses and red_qty > 0:
+        if is_redtag and red_qty > 0:
             r = InventoryResponse(
                 trailer_id=trailer.id,
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Red Tag',
-                note=note_redtag or generic_note,
+                note=red_text,
                 quantity=red_qty,
                 category=category
             )
             responses.append(r)
             flagged_items.append(r)
-            current_app.logger.debug(f"[SUBMIT] Red Tag: {item_number} x{red_qty}")
 
-        if 'Complete' in statuses:
+        # Optional: keep "Complete" entry with 0 for history (no effect on pull list)
+        if is_complete:
             responses.append(InventoryResponse(
                 trailer_id=trailer.id,
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Complete',
-                note=note_complete or generic_note,
+                note='',
                 quantity=0,
                 category=category
             ))
 
-    # Extra tooling (credit-back) — per-status text qty fields
+    # ---------- extra tooling (credit-back) ----------
     credit_back = trailer.extra_tooling or []
     extra_responses = []
     for i, item in enumerate(credit_back):
         item_name   = item.get('item_name') or item.get('name') or ''
         item_number = item.get('item_number') or item.get('number') or ''
 
-        # Status flags (select or checkboxes)
-        cb_missing  = bool(f(f"cb_{i}_missing"))
-        cb_redtag   = bool(f(f"cb_{i}_redtag"))
-        cb_complete = bool(f(f"cb_{i}_complete"))
-        sel = (f(f"extra_{i}_status") or '').strip()
-        if sel in ('Missing', 'Red Tag', 'Complete'):
-            cb_missing  = (sel == 'Missing')
-            cb_redtag   = (sel == 'Red Tag')
-            cb_complete = (sel == 'Complete')
+        cb_missing  = bool(f(request.form, f"cb_{i}_missing"))
+        cb_redtag   = bool(f(request.form, f"cb_{i}_redtag"))
+        cb_complete = bool(f(request.form, f"cb_{i}_complete"))
 
-        note_m = f(f"cb_{i}_note_missing", "")
-        note_r = f(f"cb_{i}_note_redtag", "")
-        note_c = f(f"cb_{i}_note_complete", "")
+        miss_text = (f(request.form, f"cb_{i}_qty_missing", "") or "").strip()
+        red_text  = (f(request.form, f"cb_{i}_qty_redtag",  "") or "").strip()
 
-        miss_qty = to_int(f(f"cb_{i}_qty_missing"))
-        red_qty  = to_int(f(f"cb_{i}_qty_redtag"))
+        miss_qty = parse_first_int(miss_text, default=0)
+        red_qty  = parse_first_int(red_text,  default=0)
 
         if cb_missing and miss_qty > 0:
             r = InventoryResponse(
@@ -319,13 +282,12 @@ def trailer_update(trailer_id):
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Missing',
-                note=note_m,
+                note=miss_text,
                 quantity=miss_qty,
                 category='Extra Tooling'
             )
             extra_responses.append(r)
             flagged_items.append(r)
-            current_app.logger.debug(f"[SUBMIT][EXTRA] Missing: {item_number} x{miss_qty}")
 
         if cb_redtag and red_qty > 0:
             r = InventoryResponse(
@@ -333,13 +295,12 @@ def trailer_update(trailer_id):
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Red Tag',
-                note=note_r,
+                note=red_text,
                 quantity=red_qty,
                 category='Extra Tooling'
             )
             extra_responses.append(r)
             flagged_items.append(r)
-            current_app.logger.debug(f"[SUBMIT][EXTRA] Red Tag: {item_number} x{red_qty}")
 
         if cb_complete:
             extra_responses.append(InventoryResponse(
@@ -347,7 +308,7 @@ def trailer_update(trailer_id):
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Complete',
-                note=note_c,
+                note='',
                 quantity=0,
                 category='Extra Tooling'
             ))
@@ -357,7 +318,7 @@ def trailer_update(trailer_id):
     if extra_responses:
         db.session.add_all(extra_responses)
 
-    # Create invoice DB row (optionally with generated file path)
+    # create invoice row (file path optional)
     if flagged_items:
         try:
             invoice_path = generate_invoice(trailer.id, flagged_items) or ""
@@ -368,10 +329,8 @@ def trailer_update(trailer_id):
     else:
         db.session.add(Invoice(trailer_id=trailer.id, file_path=""))
 
-    # Mark trailer completed on submit
     trailer.status = 'Completed'
     db.session.commit()
 
     flash('Inventory submitted. Trailer marked Completed and invoice recorded.', 'success')
-    # Go to pull list (the HTML summary)
     return redirect(url_for('inventory.pull_list', trailer_id=trailer.id))
