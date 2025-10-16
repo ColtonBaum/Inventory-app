@@ -8,11 +8,43 @@ from database import db
 from utils.invoice_generator import generate_invoice
 from utils.tooling_lists import get_tooling_list  # helper to fetch list by name
 from sqlalchemy import desc
+from datetime import datetime, timedelta
 from collections import defaultdict
-from datetime import timedelta
 import os
 
 inventory_bp = Blueprint('inventory', __name__)
+
+# ---------- Helpers ----------
+def _apply_ln25_from_form(trailer, form):
+    """
+    Accept common LN-25 field aliases from forms and write to whichever Trailer
+    attribute actually exists in your model. No DB migration required.
+    """
+    incoming = (
+        form.get('ln_25s') or form.get('ln_25') or form.get('ln25') or
+        form.get('LN_25') or form.get('LN25') or form.get('LN_25s') or ''
+    )
+    incoming = (incoming or '').strip()
+    if not incoming:
+        return
+
+    # Try common attribute names; stop at the first one this model has.
+    for attr in ['ln_25s', 'ln_25', 'ln25', 'lN_25s', 'LN_25', 'LN25', 'LN_25s', 'ln25s']:
+        if hasattr(trailer, attr):
+            setattr(trailer, attr, incoming)
+            break
+
+
+def _week_range(dt: datetime):
+    """Return (monday, sunday) date objects for the week containing dt (Mon–Sun)."""
+    if not dt:
+        return (None, None)
+    # normalize to date, then back out to Monday
+    d = dt.date()
+    monday = d - timedelta(days=d.weekday())  # Monday=0
+    sunday = monday + timedelta(days=6)
+    return (monday, sunday)
+
 
 # ---------- Dashboard ----------
 @inventory_bp.route('/')
@@ -43,12 +75,6 @@ def dashboard():
 # ---------- Global Invoices Tab (all invoices) ----------
 @inventory_bp.route('/invoices')
 def view_invoices():
-    """
-    Adds weekly (Mon–Sun) grouping while preserving your existing free-text filter.
-    Template will receive both `invoices` (flat list for backward-compat) and
-    `grouped_invoices` = [((week_start_date, week_end_date), [invoices...]), ...]
-    newest-first by week.
-    """
     q = (request.args.get('q') or "").strip().lower()
 
     invoices = Invoice.query.order_by(Invoice.created_at.desc()).all()
@@ -71,35 +97,32 @@ def view_invoices():
             return q in hay
         invoices = [inv for inv in invoices if match(inv)]
 
-    # ---- Weekly grouping (Mon–Sun) ----
-    groups = defaultdict(list)
+    # --- Weekly grouping (Mon–Sun) ---
+    buckets = defaultdict(list)  # (monday_date, sunday_date) -> [Invoice,...]
+    undated = []  # handle None created_at
     for inv in invoices:
-        dt = getattr(inv, "created_at", None) or getattr(inv, "invoice_date", None)
-        if dt is None:
-            # Put undated invoices in a special bucket using their own id as a unique key
-            groups[(None, None)].append(inv)
-            continue
-        # Compute week window using naive datetimes (server local). If you store tz-aware datetimes,
-        # this still works since weekday() is calendar-based.
-        week_start = (dt - timedelta(days=dt.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-        week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
-        key = (week_start.date(), week_end.date())
-        groups[key].append(inv)
+        if inv.created_at:
+            wk = _week_range(inv.created_at)
+            buckets[wk].append(inv)
+        else:
+            undated.append(inv)
 
-    # Sort groups newest-first by start date (None goes last)
-    def _group_sort_key(kv):
-        (start_date, _end_date) = kv[0]
-        # Place None at the very end
-        return (start_date is None, start_date if start_date is not None else 0)
+    # Sort buckets by week start descending
+    grouped_invoices = []
+    for wk, items in buckets.items():
+        grouped_invoices.append((wk, sorted(items, key=lambda i: (i.created_at or datetime.min), reverse=True)))
+    grouped_invoices.sort(key=lambda pair: (pair[0][0] or datetime.min.date()), reverse=True)
 
-    grouped_invoices = sorted(groups.items(), key=_group_sort_key, reverse=True)
+    # Put undated at the end, with a (None, None) key
+    if undated:
+        grouped_invoices.append(((None, None), undated))
 
     return render_template(
         'invoices.html',
-        invoices=invoices,                 # kept for backward compatibility
-        grouped_invoices=grouped_invoices, # new: weekly buckets
+        invoices=invoices,            # fallback in template
         trailers=trailers,
-        q=q
+        q=q,
+        grouped_invoices=grouped_invoices
     )
 
 # NEW: Delete an invoice (removes DB row and file if present)
@@ -154,6 +177,10 @@ def add_trailer():
             inventory_type=request.form.get('inventory_type') or None,
             extra_tooling=tooling_items
         )
+
+        # Capture LN-25 from the form into whichever attribute exists on Trailer
+        _apply_ln25_from_form(trailer, request.form)
+
         db.session.add(trailer)
         db.session.commit()
         flash('Trailer assigned. Status set to Pending.', 'success')
@@ -186,6 +213,9 @@ def edit_trailer(trailer_id):
         trailer.tooling_list_name = request.form.get('tooling_list_name') or trailer.tooling_list_name
         trailer.assigned_user = request.form.get('assigned_user') or trailer.assigned_user
         trailer.extra_tooling = tooling_items
+
+        # Capture/overwrite LN-25 from the form
+        _apply_ln25_from_form(trailer, request.form)
 
         db.session.commit()
         flash('Trailer details updated.', 'success')
@@ -263,157 +293,92 @@ def view_form(trailer_id):
 # ---------- Pull List (HTML "invoice" view) ----------
 @inventory_bp.route('/trailer/<int:trailer_id>/pull-list')
 def pull_list(trailer_id):
-    """
-    1) Group flagged (Missing/Red Tag) items by Category (excluding 'Extra Tooling' which
-       gets its own section). Each category contains aggregated rows per item.
-    2) Extras credit-back shows ALL extras for the trailer (not just flagged), including
-       items marked Complete and even items with no responses yet.
-    """
     trailer = Trailer.query.get_or_404(trailer_id)
 
-    # --- A) FLAGGED (non-extra) grouped by category ---
-    flagged_q = (InventoryResponse.query
-                 .filter(InventoryResponse.trailer_id == trailer_id,
-                         InventoryResponse.status.in_(["Missing", "Red Tag"]))
-                 .all())
+    # All responses for this trailer
+    all_responses = (InventoryResponse.query
+                     .filter(InventoryResponse.trailer_id == trailer_id)
+                     .all())
 
-    # Build category -> (item_number,item_name) -> counts
-    cat_map = defaultdict(lambda: defaultdict(lambda: {"item_number": "", "item_name": "",
-                                                       "missing_qty": 0, "redtag_qty": 0}))
-    for r in flagged_q:
-        cat = (r.category or 'General').strip()
-        if cat.lower() == 'extra tooling':
-            # handled in Extras section
-            continue
+    # --- Group main flagged items (Missing/Red Tag) by Category ---
+    flagged = [r for r in all_responses if r.status in ("Missing", "Red Tag") and (r.category or '').strip().lower() != 'extra tooling']
+
+    grouped = defaultdict(lambda: defaultdict(lambda: {"Missing": 0, "Red Tag": 0}))
+    for r in flagged:
+        category = (r.category or 'General').strip() or 'General'
         key = (r.item_number, r.item_name)
-        bucket = cat_map[cat][key]
-        bucket["item_number"] = r.item_number
-        bucket["item_name"] = r.item_name
-        qty = 0
         try:
             qty = int(r.quantity or 0)
         except Exception:
-            pass
-        if r.status == "Missing":
-            bucket["missing_qty"] += qty
-        elif r.status == "Red Tag":
-            bucket["redtag_qty"] += qty
+            qty = 0
+        if r.status in ("Missing", "Red Tag"):
+            grouped[category][key][r.status] += qty
 
-    # Convert to sorted structure suitable for simple, non-accordion rendering
+    # convert to template-friendly list: [(category, [rows...]), ...]
     grouped_flagged = []
-    for category, items_dict in cat_map.items():
-        rows = list(items_dict.values())
+    for category, items_map in grouped.items():
+        rows = []
+        for (item_number, item_name), counts in items_map.items():
+            rows.append({
+                "item_name": item_name,
+                "item_number": item_number,
+                "missing_qty": counts.get("Missing", 0),
+                "redtag_qty": counts.get("Red Tag", 0),
+            })
         rows.sort(key=lambda x: (x["item_name"] or "").lower())
         grouped_flagged.append((category, rows))
-    grouped_flagged.sort(key=lambda kv: kv[0].lower())
+    # stable sort by category name
+    grouped_flagged.sort(key=lambda pair: (pair[0] or "").lower())
 
-    # --- B) EXTRAS CREDIT-BACK (ALL items, not filtered) ---
-    # Source of truth = trailer.extra_tooling (assigned list)
-    extras_catalog = trailer.extra_tooling or []  # [{item_name, item_number, quantity}, ...]
+    # --- Extras: show ALL items with Assigned/Missing/RedTag/Complete ---
+    # Build assigned quantities from trailer.extra_tooling
+    assigned_map = {}  # (item_number, item_name) -> assigned_qty
+    for it in (trailer.extra_tooling or []):
+        key = ((it.get('item_number') or '').strip(), (it.get('item_name') or '').strip())
+        assigned_map[key] = int(it.get('quantity') or 0)
 
-    # Collect ALL extra responses (any status) for this trailer
-    extra_resps = (InventoryResponse.query
-                   .filter(InventoryResponse.trailer_id == trailer_id,
-                           InventoryResponse.category.ilike('%extra tooling%'))
-                   .all())
+    # Aggregate extra responses by status
+    extra_counts = defaultdict(lambda: {"assigned": 0, "Missing": 0, "Red Tag": 0, "Complete": 0})
+    # seed from assigned_map so even items without responses appear
+    for key, qty in assigned_map.items():
+        extra_counts[key]["assigned"] = qty
 
-    # Aggregate responses by item_number/name into per-status counts & last note per status
-    resp_map = defaultdict(lambda: {"item_number": "", "item_name": "",
-                                    "missing_qty": 0, "redtag_qty": 0, "complete_qty": 0,
-                                    "notes_missing": "", "notes_redtag": "", "notes_complete": ""})
-    for r in extra_resps:
-        key = (r.item_number, r.item_name)
-        bucket = resp_map[key]
-        bucket["item_number"] = r.item_number or ""
-        bucket["item_name"] = r.item_name or ""
-        qty = 0
-        try:
-            qty = int(r.quantity or 0)
-        except Exception:
-            pass
-        status = (r.status or "").lower()
-        if status == "missing":
-            bucket["missing_qty"] += qty
-            bucket["notes_missing"] = r.note or bucket["notes_missing"]
-        elif status == "red tag":
-            bucket["redtag_qty"] += qty
-            bucket["notes_redtag"] = r.note or bucket["notes_redtag"]
-        elif status == "complete":
-            bucket["complete_qty"] += qty
-            bucket["notes_complete"] = r.note or bucket["notes_complete"]
+    for r in all_responses:
+        if (r.category or '').strip().lower() == 'extra tooling':
+            key = (r.item_number or '', r.item_name or '')
+            try:
+                qty = int(r.quantity or 0)
+            except Exception:
+                qty = 0
+            if r.status in ("Missing", "Red Tag", "Complete"):
+                extra_counts[key][r.status] += qty
+            # if an extra item is only in responses (not in assigned_map), keep assigned=0
+            extra_counts[key]["assigned"] = max(extra_counts[key].get("assigned", 0), assigned_map.get(key, 0))
 
-    # Merge catalog (assigned extras) with responses so ALL extras appear
-    extras_rows_map = {}
-    for item in extras_catalog:
-        key = (item.get("item_number") or "", item.get("item_name") or "")
-        base = {
-            "item_number": key[0],
-            "item_name": key[1],
-            "assigned_qty": int(item.get("quantity") or 0),
-            "missing_qty": 0, "redtag_qty": 0, "complete_qty": 0,
-            "notes_missing": "", "notes_redtag": "", "notes_complete": ""
-        }
-        # overlay response counts if present
-        if key in resp_map:
-            base.update({k: v for k, v in resp_map[key].items() if k in base or k.startswith("notes_")})
-        extras_rows_map[key] = base
+    extras_rows = []
+    for (item_number, item_name), counts in extra_counts.items():
+        extras_rows.append({
+            "item_name": item_name,
+            "item_number": item_number,
+            "assigned_qty": counts.get("assigned", 0),
+            "missing_qty": counts.get("Missing", 0),
+            "redtag_qty": counts.get("Red Tag", 0),
+            "complete_qty": counts.get("Complete", 0),
+        })
+    extras_rows.sort(key=lambda x: (x["item_name"] or "").lower())
 
-    # Also include any extra responses that weren't in the original catalog (edge case)
-    for key, agg in resp_map.items():
-        if key not in extras_rows_map:
-            extras_rows_map[key] = {
-                "item_number": agg["item_number"],
-                "item_name": agg["item_name"],
-                "assigned_qty": 0,
-                "missing_qty": agg["missing_qty"],
-                "redtag_qty": agg["redtag_qty"],
-                "complete_qty": agg["complete_qty"],
-                "notes_missing": agg["notes_missing"],
-                "notes_redtag": agg["notes_redtag"],
-                "notes_complete": agg["notes_complete"],
-            }
-
-    extras_rows = sorted(extras_rows_map.values(), key=lambda x: (x["item_name"] or "").lower())
-
-    # ---- Back-compat outputs (so your existing template keeps working) ----
-    # Old: rows (main flagged, aggregated) and extra_rows (flagged extras only)
-    # We'll still compute them, but note: the new UI should use grouped_flagged + extras_rows.
-    def _to_legacy_rows_for_main(grouped):
-        legacy = []
-        for _cat, rows in grouped:
-            for r in rows:
-                legacy.append({
-                    "item_name": r["item_name"],
-                    "item_number": r["item_number"],
-                    "missing_qty": r["missing_qty"],
-                    "redtag_qty": r["redtag_qty"],
-                })
-        # keep name sort to match previous behavior
-        return sorted(legacy, key=lambda x: (x["item_name"] or "").lower())
-
-    rows_main_legacy = _to_legacy_rows_for_main(grouped_flagged)
-
-    def _to_legacy_rows_for_extras(extras):
-        # previously only flagged shown; keep everything but the template may only show missing/redtag
-        return [{
-            "item_name": r["item_name"],
-            "item_number": r["item_number"],
-            "missing_qty": r["missing_qty"],
-            "redtag_qty": r["redtag_qty"],
-            # note: complete_qty is now available if you update the template
-        } for r in extras]
-
-    rows_extra_legacy = _to_legacy_rows_for_extras(extras_rows)
+    # Fallback legacy rows (not used by your updated template but kept for safety)
+    rows_main = []
+    rows_extra = []
+    # (kept intentionally empty; new template uses grouped_flagged/extras_rows)
 
     return render_template(
         'pull_list.html',
         trailer=trailer,
-        # NEW preferred context:
-        grouped_flagged=grouped_flagged,  # [(category, [rows...]), ...]
-        extras_rows=extras_rows,          # ALL extras (missing/red tag/complete, plus assigned_qty)
-        # Back-compat:
-        rows=rows_main_legacy,
-        extra_rows=rows_extra_legacy
+        grouped_flagged=grouped_flagged,
+        extras_rows=extras_rows,
+        rows=rows_main,
+        extra_rows=rows_extra
     )
 
 @inventory_bp.route('/invoice/<int:invoice_id>/download')
@@ -489,7 +454,7 @@ def edit_submission(trailer_id):
         else:
             db.session.add(Invoice(trailer_id=trailer.id, file_path=""))
 
-        # Extra tooling (credit-back) — use normalized keys
+        # Extra tooling (credit-back) — collect ALL statuses; category 'Extra Tooling'
         extra_responses = []
         credit_back_items = trailer.extra_tooling or []
         for i, item in enumerate(credit_back_items):
