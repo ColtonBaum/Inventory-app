@@ -85,6 +85,9 @@
       <div><strong>Location:</strong> {{ trailer.location }}</div>
       <div><strong>Tooling List:</strong> {{ trailer.tooling_list_name }}</div>
       <div><strong>Assigned User:</strong> {{ trailer.assigned_user or '—' }}</div>
+      {# NEW: LN-25 with broad fallbacks #}
+      {% set ln25 = trailer.ln_25s or trailer.ln_25 or trailer.ln25 or trailer.lN_25s or trailer.LN_25 or trailer.LN25 or trailer.LN_25s or trailer.ln25s %}
+      <div><strong>LN-25:</strong> {{ ln25 or '—' }}</div>
     </div>
   </div>
 
