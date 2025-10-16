@@ -61,9 +61,17 @@
     padding:10px 12px; display:flex; gap:10px; justify-content:space-between; z-index:10;
     border-bottom-left-radius:12px; border-bottom-right-radius:12px;
   }
-  .actions-sticky .btn { flex:1; text-align:center; }
+  .actions-sticky .btn { text-align:center; }
   #expandAll, #collapseAll { padding:10px 14px; font-size:16px; }
   @media (min-width:1100px){ .wrap .bd { padding:16px 18px 100px; } }
+
+  /* tiny toast */
+  .toast {
+    position: fixed; right: 14px; bottom: 14px; background:#111827; color:#fff;
+    padding:10px 12px; border-radius:10px; font-size:14px; opacity:0; pointer-events:none;
+    transform: translateY(10px); transition: opacity .2s ease, transform .2s ease;
+  }
+  .toast.show { opacity:1; transform: translateY(0); pointer-events:auto; }
 </style>
 {% endblock %}
 
@@ -81,7 +89,8 @@
   </div>
 
   <div class="bd">
-    <form method="POST" action="{{ url_for('trailer_assignment.trailer_update', trailer_id=trailer.id) }}">
+    <!-- add id so autosave can target the form -->
+    <form id="inventory-form" method="POST" action="{{ url_for('trailer_assignment.trailer_update', trailer_id=trailer.id) }}">
       {% if not read_only %}
       <div class="name-field">
         <label class="label">Your Name (who is filling this out)</label><br/>
@@ -102,7 +111,8 @@
         {% for group in tooling_list|groupby('Category') %}
           {% set category = group.grouper or 'General' %}
           {% set items = group.list %}
-          <div class="acc-item {% if loop.first %}open{% endif %}">
+          <!-- data-cat is used to save/restore open sections -->
+          <div class="acc-item {% if loop.first %}open{% endif %}" data-cat="{{ category }}">
             <button type="button" class="acc-header" aria-expanded="{% if loop.first %}true{% else %}false{% endif %}">
               <span class="acc-title"><span class="caret">▶</span> {{ category }}</span>
               <span class="acc-count">{{ items|length }} items</span>
@@ -173,7 +183,7 @@
       {% if credit_back_items %}
         <h3 style="margin:20px 0 8px; color:var(--fg); font-size:18px;">Extra Tooling Credit-Back</h3>
         <div class="accordion">
-          <div class="acc-item open">
+          <div class="acc-item open" data-cat="__extras__">
             <button type="button" class="acc-header" aria-expanded="true">
               <span class="acc-title"><span class="caret">▶</span> Extra Tooling</span>
               <span class="acc-count">{{ credit_back_items|length }} items</span>
@@ -233,7 +243,10 @@
 
       {% if not read_only %}
         <div class="actions-sticky">
-          <button class="btn" type="submit">Submit Inventory</button>
+          <div style="display:flex; gap:10px;">
+            <button class="btn" type="submit">Submit Inventory</button>
+            <a class="btn ghost" id="clear-draft" href="#" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">Clear Draft</a>
+          </div>
           <a class="btn muted" href="{{ url_for('inventory.dashboard') }}" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">Cancel</a>
         </div>
       {% else %}
@@ -244,6 +257,14 @@
     </form>
   </div>
 </div>
+
+<!-- tiny toast for restore/save status -->
+<div id="draft-toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- JSON blob with server values (no Jinja in JS) -->
+<script id="inv-values" type="application/json">
+  {{ {'trailer_id': trailer.id, 'who': (trailer.assigned_user or 'anon')|replace(':','_') } | tojson }}
+</script>
 {% endblock %}
 
 {% block scripts %}
@@ -258,6 +279,7 @@
       const willOpen = !item.classList.contains('open');
       item.classList.toggle('open', willOpen);
       header.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (window.__inv_saveOpenState) window.__inv_saveOpenState();
     });
 
     const accordion = document.getElementById('inv-accordion');
@@ -270,6 +292,7 @@
         item.classList.toggle('open', open);
         if (header) header.setAttribute('aria-expanded', open ? 'true' : 'false');
       });
+      if (window.__inv_saveOpenState) window.__inv_saveOpenState();
     }
     if (expandAllBtn) expandAllBtn.addEventListener('click', function(){ setAll(true); });
     if (collapseAllBtn) collapseAllBtn.addEventListener('click', function(){ setAll(false); });
@@ -295,5 +318,150 @@
     document.querySelectorAll('.item').forEach(wireItem);
   });
 </script>
-{% endblock %}
 
+{% if not read_only %}
+<script>
+(function () {
+  const form = document.getElementById('inventory-form');
+  if (!form) return;
+
+  const toast = document.getElementById('draft-toast');
+
+  // Pull server values from JSON blob (no Jinja in JS)
+  let trailerId = 0, who = 'anon';
+  try {
+    const el = document.getElementById('inv-values');
+    if (el) {
+      const vals = JSON.parse(el.textContent || '{}');
+      trailerId = Number(vals.trailer_id || 0);
+      who = String(vals.who || 'anon');
+    }
+  } catch (_) {}
+  const key = `inv_draft:${trailerId}:${who}`;
+
+  // Robust CSS.escape fallback
+  const cssEscape = (window.CSS && CSS.escape) ? CSS.escape : function (s) {
+    return String(s).replace(/["\\]/g, '\\$&');
+  };
+
+  function showToast(msg){
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=>toast.classList.remove('show'), 1600);
+  }
+
+  function collectValues() {
+    const data = {};
+    form.querySelectorAll('input[name], textarea[name], select[name]').forEach(el => {
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        data[el.name] = !!el.checked;
+      } else {
+        data[el.name] = el.value;
+      }
+    });
+    // save open/closed sections keyed by data-cat
+    const openCats = Array.from(document.querySelectorAll('.acc-item.open'))
+      .map(el => el.getAttribute('data-cat'))
+      .filter(Boolean);
+    data.__open = openCats;
+    data.__ts = Date.now();
+    return data;
+  }
+
+  function applyValues(data) {
+    Object.entries(data).forEach(([name, val]) => {
+      if (name.startsWith('__')) return;
+      const el = form.querySelector(`[name="${cssEscape(name)}"]`);
+      if (!el) return;
+      if (el.type === 'checkbox' || el.type === 'radio') {
+        el.checked = !!val;
+        el.dispatchEvent(new Event('change', { bubbles: true })); // update note toggles
+      } else {
+        el.value = val;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
+    // restore open sections
+    const openCats = Array.isArray(data.__open) ? data.__open : [];
+    document.querySelectorAll('.acc-item').forEach(item => {
+      const cat = item.getAttribute('data-cat');
+      const shouldOpen = openCats.includes(cat);
+      item.classList.toggle('open', shouldOpen);
+      const header = item.querySelector('.acc-header');
+      if (header) header.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    });
+
+    // ensure note reveal states are correct
+    document.querySelectorAll('.item').forEach(item => {
+      const missing = item.querySelector('input[name$="_status_missing"], input[name^="cb_"][name$="_missing"]');
+      const redtag  = item.querySelector('input[name$="_status_redtag"],  input[name^="cb_"][name$="_redtag"]');
+      const noteMissing = item.querySelector('.note-missing');
+      const noteRedtag  = item.querySelector('.note-redtag');
+      if (noteMissing && missing) noteMissing.style.display = missing.checked ? 'block' : 'none';
+      if (noteRedtag && redtag) noteRedtag.style.display = redtag.checked ? 'block' : 'none';
+    });
+  }
+
+  function save() {
+    try {
+      const payload = collectValues();
+      localStorage.setItem(key, JSON.stringify(payload));
+      showToast('Draft saved');
+    } catch (e) { /* ignore */ }
+  }
+
+  function restoreIfAny() {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    try {
+      const data = JSON.parse(raw);
+      applyValues(data);
+      showToast('Draft restored');
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // expose a tiny hook so accordion clicks can persist open state immediately
+  window.__inv_saveOpenState = function(){
+    try {
+      const raw = localStorage.getItem(key);
+      const data = raw ? JSON.parse(raw) : {};
+      data.__open = Array.from(document.querySelectorAll('.acc-item.open'))
+        .map(el => el.getAttribute('data-cat'))
+        .filter(Boolean);
+      data.__ts = Date.now();
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch(e) {}
+  };
+
+  // Auto-restore (no prompt)
+  restoreIfAny();
+
+  // Debounced autosave on changes
+  let t;
+  function debouncedSave() { clearTimeout(t); t = setTimeout(save, 400); }
+  form.addEventListener('input', debouncedSave);
+  form.addEventListener('change', debouncedSave);
+
+  // Save on unload as a safety net
+  window.addEventListener('beforeunload', save);
+
+  // Clear draft on successful submit
+  form.addEventListener('submit', () => { localStorage.removeItem(key); });
+
+  // Manual clear button
+  const clearBtn = document.getElementById('clear-draft');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      localStorage.removeItem(key);
+      showToast('Draft cleared');
+    });
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}

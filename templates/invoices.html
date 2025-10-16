@@ -33,6 +33,12 @@
 
   /* inline delete form */
   .delete-form { display:inline; margin:0; }
+
+  /* Week section header */
+  .week-h {
+    margin: 18px 0 8px 0; padding: 6px 10px;
+    font-weight: 600; color:#111827; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:8px;
+  }
 </style>
 {% endblock %}
 
@@ -50,7 +56,64 @@
   </div>
 
   <div class="bd">
-    {% if invoices %}
+    {# --- Weekly grouped view (preferred) --- #}
+    {% if grouped_invoices is defined and grouped_invoices %}
+      {% for key, invs in grouped_invoices %}
+        {% set start_date = key[0] %}
+        {% set end_date = key[1] %}
+
+        <div class="week-h">
+          {% if start_date and end_date %}
+            Week {{ start_date.strftime('%b %d, %Y') }} – {{ end_date.strftime('%b %d, %Y') }}
+          {% else %}
+            Undated invoices
+          {% endif %}
+        </div>
+
+        <div class="table-wrap" style="margin-bottom: 18px;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 14%;">Created</th>
+                <th style="width: 10%;">Trailer #</th>
+                <th style="width: 18%;">Job Name</th>
+                <th style="width: 14%;">Job #</th>
+                <th style="width: 16%;">Location</th>
+                <th style="width: 12%;">Assignee</th>
+                <th style="width: 16%;">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for inv in invs %}
+                {% set t = trailers.get(inv.trailer_id) %}
+                <tr>
+                  <td>{{ inv.created_at.strftime('%Y-%m-%d %H:%M') if inv.created_at else '—' }}</td>
+                  <td><span class="pill">#{{ inv.trailer_id }}</span></td>
+                  <td>{{ t.job_name if t else '—' }}</td>
+                  <td>{{ t.job_number if t else '—' }}</td>
+                  <td>{{ t.location if t else '—' }}</td>
+                  <td>{{ t.assigned_user if t and t.assigned_user else '—' }}</td>
+                  <td>
+                    <div class="actions">
+                      <a class="btn btn-sm" href="{{ url_for('inventory.pull_list', trailer_id=inv.trailer_id) }}">View Invoice</a>
+                      {% if inv.file_path %}
+                        <a class="btn ghost btn-sm" href="{{ url_for('inventory.download_invoice', invoice_id=inv.id) }}">Download File</a>
+                      {% endif %}
+                      <form class="delete-form" method="POST" action="{{ url_for('inventory.delete_invoice', invoice_id=inv.id) }}"
+                            onsubmit="return confirm('Delete this invoice? This cannot be undone.');">
+                        <button type="submit" class="btn danger btn-sm">Delete</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+
+    {# --- Fallback: original flat table --- #}
+    {% elif invoices %}
       <div class="table-wrap">
         <table>
           <thead>
@@ -80,7 +143,6 @@
                     {% if inv.file_path %}
                       <a class="btn ghost btn-sm" href="{{ url_for('inventory.download_invoice', invoice_id=inv.id) }}">Download File</a>
                     {% endif %}
-                    <!-- Delete Invoice -->
                     <form class="delete-form" method="POST" action="{{ url_for('inventory.delete_invoice', invoice_id=inv.id) }}"
                           onsubmit="return confirm('Delete this invoice? This cannot be undone.');">
                       <button type="submit" class="btn danger btn-sm">Delete</button>
@@ -92,6 +154,7 @@
           </tbody>
         </table>
       </div>
+
     {% else %}
       <p style="color:#6b7280; margin:0;">No invoices found{% if q %} matching “{{ q }}”{% endif %}.</p>
     {% endif %}

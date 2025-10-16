@@ -64,10 +64,20 @@
       </div>
 
       <div class="field">
-        <label>LN-25</label>
-        <input class="input" type="text" name="lN-25s" placeholder="Serial Numbers">
-      </div>
-    </div>
+  <label for="ln_25s">LN-25</label>
+  <input
+    class="input"
+    id="ln_25s"
+    type="text"
+    name="ln_25s"
+    placeholder="Serial Numbers"
+    oninput="this.form.querySelector('input[name=&quot;lN-25s&quot;]').value = this.value"
+  >
+  <!-- Back-compat alias: keeps older name populated automatically -->
+  <input type="hidden" name="lN-25s" value="">
+</div>
+</div>
+
 
     <!-- Extra Tooling (credit-back) -->
     <hr style="margin:16px 0">

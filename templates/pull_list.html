@@ -2,138 +2,173 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Pull List – Trailer #{{ trailer.id }}</title>
-    <style>
-        body { font-family: Arial, sans-serif; }
-        .header {
-            margin-bottom: 16px;
-            border-bottom: 2px solid #ddd;
-            padding-bottom: 8px;
-        }
-        .header h2 { margin: 0 0 8px; }
-        .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 24px; }
-        .meta div { font-size: 14px; }
-        h3.section-title { margin: 18px 0 8px; }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-top: 8px;
-        }
-        th, td {
-            border: 1px solid #ccc;
-            padding: 8px 10px;
-            text-align: left;
-        }
-        th { background: #f7f7f7; }
-        .pill {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 999px;
-            font-size: 12px;
-            background: #eef2ff;
-            border: 1px solid #c7d2fe;
-        }
-        .muted { color: #666; font-size: 12px; }
-        .footer-note { margin-top: 12px; font-size: 12px; color: #666; }
-        .actions { margin-top: 16px; }
-        .actions a, .actions button {
-            margin-right: 8px;
-            padding: 8px 12px;
-            text-decoration: none;
-            background: #0d6efd;
-            color: white;
-            border-radius: 6px;
-            border: none;
-            display: inline-block;
-        }
-        .actions a.secondary, .actions button.secondary { background: #6c757d; }
-        @media print { .actions { display: none; } }
-    </style>
+  <title>Pull List – Trailer #{{ trailer.id }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .header { margin-bottom: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
+    .header h2 { margin: 0 0 8px; }
+    .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 24px; }
+    .meta div { font-size: 14px; }
+    h3.section-title { margin: 18px 0 8px; }
+    h4.cat { margin: 10px 0 6px; font-size: 15px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+    th { background: #f7f7f7; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #eef2ff; border: 1px solid #c7d2fe; }
+    .muted { color: #666; font-size: 12px; }
+    .footer-note { margin-top: 12px; font-size: 12px; color: #666; }
+    .actions { margin-top: 16px; }
+    .actions a, .actions button {
+      margin-right: 8px; padding: 8px 12px; text-decoration: none;
+      background: #0d6efd; color: white; border-radius: 6px; border: none; display: inline-block;
+    }
+    .actions a.secondary, .actions button.secondary { background: #6c757d; }
+    @media print { .actions { display: none; } }
+  </style>
 </head>
 <body>
-    <div class="header">
-        <h2>Pull List <span class="pill">Trailer #{{ trailer.id }}</span></h2>
-        <div class="meta">
-            <div><strong>Job Name:</strong> {{ trailer.job_name }}</div>
-            <div><strong>Job Number:</strong> {{ trailer.job_number }}</div>
-            <div><strong>Location:</strong> {{ trailer.location }}</div>
-            <div><strong>Foreman:</strong> {{ trailer.foreman_name }}</div>
-            <div><strong>Tooling List:</strong> {{ trailer.tooling_list_name }}</div>
-            <div><strong>Assigned User:</strong> {{ trailer.assigned_user or '—' }}</div>
+  <div class="header">
+    <h2>Pull List <span class="pill">Trailer #{{ trailer.id }}</span></h2>
+    <div class="meta">
+      <div><strong>Job Name:</strong> {{ trailer.job_name }}</div>
+      <div><strong>Job Number:</strong> {{ trailer.job_number }}</div>
+      <div><strong>Location:</strong> {{ trailer.location }}</div>
+      <div><strong>Foreman:</strong> {{ trailer.foreman_name }}</div>
+      <div><strong>Tooling List:</strong> {{ trailer.tooling_list_name }}</div>
+      <div><strong>Assigned User:</strong> {{ trailer.assigned_user or '—' }}</div>
 
-            {# LN-25 serials (supports multiple possible attribute names) #}
-            {% set ln25 = trailer.ln_25s or trailer.lN_25s or trailer.ln25 or trailer.LN_25 %}
-            <div><strong>LN-25:</strong> {{ ln25 or '—' }}</div>
+      {# LN-25 serials (supports multiple possible attribute names) #}
+      {% set ln25 = trailer.ln_25s or trailer.lN_25s or trailer.ln25 or trailer.LN_25 %}
+      <div><strong>LN-25:</strong> {{ ln25 or '—' }}</div>
 
-            {# External trailer ID if different from db PK #}
-            {% if trailer.tool_trailer_id %}
-                <div><strong>Tool Trailer ID:</strong> {{ trailer.tool_trailer_id }}</div>
-            {% elif trailer.trailer_id and trailer.trailer_id != trailer.id %}
-                <div><strong>Trailer ID (ext):</strong> {{ trailer.trailer_id }}</div>
-            {% endif %}
-        </div>
+      {# External trailer ID if different from db PK #}
+      {% if trailer.tool_trailer_id %}
+        <div><strong>Tool Trailer ID:</strong> {{ trailer.tool_trailer_id }}</div>
+      {% elif trailer.trailer_id and trailer.trailer_id != trailer.id %}
+        <div><strong>Trailer ID (ext):</strong> {{ trailer.trailer_id }}</div>
+      {% endif %}
     </div>
+  </div>
 
-    {# -------- Main (regular) inventory flagged items -------- #}
-    {% if rows and rows|length %}
-        <h3 class="section-title">Flagged Items (Main Inventory)</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 40%;">Item Name</th>
-                    <th style="width: 20%;">Item #</th>
-                    <th style="width: 20%;">Missing Qty</th>
-                    <th style="width: 20%;">Red Tag Qty</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for r in rows %}
-                <tr>
-                    <td>{{ r.item_name }}</td>
-                    <td>{{ r.item_number }}</td>
-                    <td>{{ r.missing_qty or 0 }}</td>
-                    <td>{{ r.redtag_qty or 0 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <div class="footer-note">Only items marked Missing or Red Tag are shown.</div>
-    {% endif %}
+  {# -------- Main flagged items, grouped by Category (no accordion) -------- #}
+  {% if grouped_flagged is defined and grouped_flagged %}
+    <h3 class="section-title">Flagged Items (Grouped by Category)</h3>
 
-    {# -------- Extra Tooling (credit-back) flagged items -------- #}
-    {% if extra_rows and extra_rows|length %}
-        <h3 class="section-title">Extra Tooling (Credit-Back)</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 40%;">Item Name</th>
-                    <th style="width: 20%;">Item #</th>
-                    <th style="width: 20%;">Missing Qty</th>
-                    <th style="width: 20%;">Red Tag Qty</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for r in extra_rows %}
-                <tr>
-                    <td>{{ r.item_name }}</td>
-                    <td>{{ r.item_number }}</td>
-                    <td>{{ r.missing_qty or 0 }}</td>
-                    <td>{{ r.redtag_qty or 0 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <div class="footer-note">Extra Tooling items reported as Missing or Red Tag are listed here.</div>
-    {% endif %}
+    {% for category, items in grouped_flagged %}
+      <h4 class="cat">{{ category }}</h4>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 40%;">Item Name</th>
+            <th style="width: 20%;">Item #</th>
+            <th style="width: 20%;">Missing Qty</th>
+            <th style="width: 20%;">Red Tag Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in items %}
+            <tr>
+              <td>{{ it.item_name }}</td>
+              <td>{{ it.item_number }}</td>
+              <td>{{ it.missing_qty or 0 }}</td>
+              <td>{{ it.redtag_qty or 0 }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% endfor %}
+    <div class="footer-note">Includes items marked Missing or Red Tag from the main inventory, grouped by category.</div>
 
-    {% if (not rows or not rows|length) and (not extra_rows or not extra_rows|length) %}
-        <p class="muted">No Missing or Red Tag items were reported on this submission.</p>
-    {% endif %}
+  {% elif rows and rows|length %}
+    {# Fallback to legacy flat list if grouped_flagged not provided #}
+    <h3 class="section-title">Flagged Items (Main Inventory)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 40%;">Item Name</th>
+          <th style="width: 20%;">Item #</th>
+          <th style="width: 20%;">Missing Qty</th>
+          <th style="width: 20%;">Red Tag Qty</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>{{ r.item_name }}</td>
+            <td>{{ r.item_number }}</td>
+            <td>{{ r.missing_qty or 0 }}</td>
+            <td>{{ r.redtag_qty or 0 }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="footer-note">Only items marked Missing or Red Tag are shown.</div>
+  {% endif %}
 
-    <div class="actions">
-        <a href="{{ url_for('inventory.edit_submission', trailer_id=trailer.id) }}">Edit Submission</a>
-        <a class="secondary" href="{{ url_for('inventory.dashboard') }}">Back to Dashboard</a>
-        <button onclick="window.print()">Print</button>
-    </div>
+  {# -------- Extra Tooling (credit-back): show ALL items -------- #}
+  {% if extras_rows is defined and extras_rows %}
+    <h3 class="section-title">Extra Tooling (Credit-Back) — All Items</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 32%;">Item Name</th>
+          <th style="width: 18%;">Item #</th>
+          <th style="width: 12%;">Assigned</th>
+          <th style="width: 12%;">Missing</th>
+          <th style="width: 12%;">Red Tag</th>
+          <th style="width: 14%;">Complete</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in extras_rows %}
+          <tr>
+            <td>{{ r.item_name }}</td>
+            <td>{{ r.item_number }}</td>
+            <td>{{ r.assigned_qty or 0 }}</td>
+            <td>{{ r.missing_qty or 0 }}</td>
+            <td>{{ r.redtag_qty or 0 }}</td>
+            <td>{{ r.complete_qty or 0 }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="footer-note">Shows all extra tooling assigned to this trailer, including items marked Complete.</div>
+
+  {% elif extra_rows and extra_rows|length %}
+    {# Fallback to legacy extras table (flagged only) #}
+    <h3 class="section-title">Extra Tooling (Credit-Back)</h3>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 40%;">Item Name</th>
+          <th style="width: 20%;">Item #</th>
+          <th style="width: 20%;">Missing Qty</th>
+          <th style="width: 20%;">Red Tag Qty</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in extra_rows %}
+          <tr>
+            <td>{{ r.item_name }}</td>
+            <td>{{ r.item_number }}</td>
+            <td>{{ r.missing_qty or 0 }}</td>
+            <td>{{ r.redtag_qty or 0 }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="footer-note">Extra Tooling items reported as Missing or Red Tag are listed here.</div>
+  {% endif %}
+
+  {% if (not (grouped_flagged is defined and grouped_flagged) and not (rows and rows|length))
+        and (not (extras_rows is defined and extras_rows) and not (extra_rows and extra_rows|length)) %}
+    <p class="muted">No items to display.</p>
+  {% endif %}
+
+  <div class="actions">
+    <a href="{{ url_for('inventory.edit_submission', trailer_id=trailer.id) }}">Edit Submission</a>
+    <a class="secondary" href="{{ url_for('inventory.dashboard') }}">Back to Dashboard</a>
+    <button onclick="window.print()">Print</button>
+  </div>
 </body>
 </html>
