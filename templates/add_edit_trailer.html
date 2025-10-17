@@ -11,6 +11,10 @@
   </div>
   <div class="card-body">
     <form method="POST">
+      {# Prefill LN-25 from any legacy field #}
+      {% set current_ln25 = trailer.ln_25s or trailer.ln_25 or trailer.ln25 or trailer.lN_25s
+                            or trailer.LN_25 or trailer.LN25 or trailer.LN_25s or trailer.ln25s %}
+
       <!-- Meta fields -->
       <div class="grid two" style="margin-bottom:14px;">
         <div class="field">
@@ -57,6 +61,14 @@
             <option value="Completed"   {% if st=='Completed' %}selected{% endif %}>Completed</option>
             <option value="Needs Review"{% if st=='Needs Review' %}selected{% endif %}>Needs Review</option>
           </select>
+        </div>
+
+        {# NEW: LN-25 field (saved via _apply_ln25_from_form on POST) #}
+        <div class="field">
+          <label for="ln25">LN-25</label>
+          <input class="input" type="text" id="ln25" name="ln_25s"
+                 placeholder="e.g., serials or count"
+                 value="{{ current_ln25 or '' }}">
         </div>
       </div>
 
@@ -145,18 +157,15 @@
     document.addEventListener('click', (e) => {
       const btn = e.target.closest('.removeRowBtn');
       if (!btn) return;
-      const field = btn.closest('.grid.three') || btn.closest('.field')?.parentElement;
-      // We structured rows as three .field blocks inside grid.three; remove those three.
-      const row = btn.closest('.field')?.parentElement;
-      if (row && row.classList.contains('grid') && row.classList.contains('three')) {
+      const row = btn.closest('.grid.three');
+      if (row) {
         row.remove();
       } else {
-        // fallback: remove only the three siblings if individually placed
-        const nameField = btn.closest('.field')?.previousElementSibling?.previousElementSibling;
-        const numberField = btn.closest('.field')?.previousElementSibling;
-        btn.closest('.field')?.remove();
-        numberField?.remove();
-        nameField?.remove();
+        // fallback: remove three sibling fields if structure differs
+        const qtyField = btn.closest('.field');
+        const numField = qtyField?.previousElementSibling;
+        const nameField = numField?.previousElementSibling;
+        qtyField?.remove(); numField?.remove(); nameField?.remove();
       }
     });
 
@@ -164,12 +173,10 @@
       const clone = tpl.cloneNode(true);
       clone.id = '';
       clone.hidden = false;
-      // ensure name attributes are arrays for Flask .getlist() (already correct: tool_name, tool_number, tool_qty)
       return clone;
     }
 
     function makeBlankRow(){
-      // Fallback if template is missing
       const row = document.createElement('div');
       row.className = 'grid three';
       row.style.rowGap = '10px';

@@ -39,7 +39,6 @@ def _week_range(dt: datetime):
     """Return (monday, sunday) date objects for the week containing dt (Mon–Sun)."""
     if not dt:
         return (None, None)
-    # normalize to date, then back out to Monday
     d = dt.date()
     monday = d - timedelta(days=d.weekday())  # Monday=0
     sunday = monday + timedelta(days=6)
@@ -231,6 +230,15 @@ def delete_trailer(trailer_id):
     flash('Trailer deleted.', 'info')
     return redirect(url_for('inventory.dashboard'))
 
+# ---------- OPTIONAL inline LN-25 updater ----------
+@inventory_bp.route('/trailer/<int:trailer_id>/ln25', methods=['POST'])
+def update_ln25(trailer_id):
+    trailer = Trailer.query.get_or_404(trailer_id)
+    _apply_ln25_from_form(trailer, request.form)
+    db.session.commit()
+    flash('LN-25 updated.', 'success')
+    return redirect(request.referrer or url_for('inventory.inventory_form', trailer_id=trailer.id))
+
 # ---------- Inventory Form (GET only: start -> In Progress) ----------
 @inventory_bp.route('/trailer/<int:trailer_id>', methods=['GET'])
 def inventory_form(trailer_id):
@@ -367,10 +375,9 @@ def pull_list(trailer_id):
         })
     extras_rows.sort(key=lambda x: (x["item_name"] or "").lower())
 
-    # Fallback legacy rows (not used by your updated template but kept for safety)
+    # Fallback legacy rows
     rows_main = []
     rows_extra = []
-    # (kept intentionally empty; new template uses grouped_flagged/extras_rows)
 
     return render_template(
         'pull_list.html',
@@ -403,9 +410,10 @@ def edit_submission(trailer_id):
     current_app.logger.info(f"[INV_EDIT] trailer={trailer.id} list_name='{list_name}' items={len(tooling_list)}")
 
     if request.method == 'POST':
-        submitted_by = (request.form.get('submitted_by') or "").strip()
-        if submitted_by:
-            trailer.assigned_user = submitted_by
+        # accept either 'assigned_user' or legacy 'submitted_by'
+        who = (request.form.get('assigned_user') or request.form.get('submitted_by') or "").strip()
+        if who:
+            trailer.assigned_user = who
 
         # Clear previous responses & invoices
         InventoryResponse.query.filter_by(trailer_id=trailer.id).delete()
