@@ -8,6 +8,39 @@ from utils.invoice_generator import generate_invoice
 trailer_assignment_bp = Blueprint('trailer_assignment', __name__)
 
 # ----------------------------------------------------------------------------- 
+# LN-25 helpers (normalize form keys, write to whichever Trailer attr exists)
+# -----------------------------------------------------------------------------
+_LN25_FORM_KEYS = (
+    'ln_25s', 'ln_25', 'ln25', 'lN-25s', 'lN_25s', 'LN_25', 'LN25', 'LN_25s', 'ln25s'
+)
+_LN25_ATTRS = (
+    'ln_25s', 'ln_25', 'ln25', 'lN_25s', 'LN_25', 'LN25', 'LN_25s', 'ln25s'
+)
+
+def _get_ln25_from_form(form) -> str | None:
+    for k in _LN25_FORM_KEYS:
+        v = (form.get(k) or '').strip()
+        if v:
+            return v
+    return None
+
+def _apply_ln25_to_model(trailer_obj: Trailer, value: str | None) -> None:
+    if not value:
+        return
+    for attr in _LN25_ATTRS:
+        if hasattr(trailer_obj, attr):
+            setattr(trailer_obj, attr, value)
+            try:
+                current_app.logger.debug(f"[LN25] Stored on Trailer.{attr} = {value!r}")
+            except Exception:
+                pass
+            return
+    try:
+        current_app.logger.warning("[LN25] No matching Trailer attribute found; value not saved.")
+    except Exception:
+        pass
+
+# ----------------------------------------------------------------------------- 
 # CREATE / ASSIGN
 # -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/assign_trailer', methods=['GET', 'POST'], endpoint='assign_trailer')
@@ -23,8 +56,9 @@ def assign_trailer():
         foreman_name   = (request.form.get('foreman_name') or '').strip() or None
         external_id    = (request.form.get('trailer_id') or '').strip() or None
 
-        ln25_val = (request.form.get('ln_25s') or request.form.get('lN-25s') or request.form.get('LN_25') or '').strip() or None
+        ln25_val = _get_ln25_from_form(request.form)
 
+        # Extra Tooling (credit-back)
         extra_tooling_data = []
         if request.form.get('enable_credit_back'):
             raw        = request.form.to_dict(flat=False)
@@ -60,11 +94,9 @@ def assign_trailer():
             extra_tooling=extra_tooling_data or None,
             foreman_name=foreman_name
         )
-        if ln25_val:
-            for attr in ('ln_25s', 'lN_25s', 'LN_25'):
-                if hasattr(t, attr):
-                    setattr(t, attr, ln25_val)
-                    break
+
+        # Persist LN-25 to whichever Trailer column exists
+        _apply_ln25_to_model(t, ln25_val)
 
         db.session.add(t)
         db.session.commit()
@@ -92,13 +124,11 @@ def update_trailer_post(trailer_id):
     tooling_list    = (request.form.get('tooling_list_name') or '').strip() or t.tooling_list_name
     status          = (request.form.get('status') or '').strip() or t.status
 
-    ln25_val = (request.form.get('ln_25s') or request.form.get('lN-25s') or request.form.get('LN_25') or '').strip()
-    if ln25_val:
-        for attr in ('ln_25s', 'lN_25s', 'LN_25'):
-            if hasattr(t, attr):
-                setattr(t, attr, ln25_val)
-                break
+    # Normalize & apply LN-25
+    ln25_val = _get_ln25_from_form(request.form)
+    _apply_ln25_to_model(t, ln25_val)
 
+    # Extra Tooling (credit-back)
     extra_tooling_data = None
     if request.form.get('enable_credit_back'):
         raw        = request.form.to_dict(flat=False)
@@ -124,6 +154,7 @@ def update_trailer_post(trailer_id):
                 })
         extra_tooling_data = rows
 
+    # Apply meta updates
     t.job_name = job_name
     t.job_number = job_number
     t.location = location
@@ -152,13 +183,8 @@ def trailer_update(trailer_id):
     if submitted_by:
         trailer.assigned_user = submitted_by
 
-    # LN-25 passthrough (if present anywhere)
-    ln25_val = (request.form.get('ln_25s') or request.form.get('lN-25s') or request.form.get('LN_25') or '').strip()
-    if ln25_val:
-        for attr in ('ln_25s', 'lN_25s', 'LN_25'):
-            if hasattr(trailer, attr):
-                setattr(trailer, attr, ln25_val)
-                break
+    # LN-25 passthrough (normalize & apply)
+    _apply_ln25_to_model(trailer, _get_ln25_from_form(request.form))
 
     # Optional meta passthroughs
     if 'location' in request.form:
@@ -216,7 +242,7 @@ def trailer_update(trailer_id):
                 item_number=str(item_number),
                 item_name=item_name,
                 status='Missing',
-                note=f(f"{base}_note_missing") or "",   # keep original text in case you want it later
+                note=f(f"{base}_note_missing") or "",
                 quantity=miss_qty,
                 category=category
             )
@@ -246,7 +272,6 @@ def trailer_update(trailer_id):
             ))
 
     # -------- EXTRA TOOLING (use posted hidden fields for each cb_* line) --------
-    # We look for any keys like "cb_{i}_item_name" to discover indices.
     cb_indices = set()
     for key in request.form.keys():
         if key.startswith('cb_') and key.endswith('_item_name'):
