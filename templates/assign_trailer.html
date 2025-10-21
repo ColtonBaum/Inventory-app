@@ -35,54 +35,54 @@
     <div class="grid">
       <div class="field">
         <label>Trailer ID *</label>
-        <input class="input" type="text" name="trailer_id" placeholder="e.g., T-1001" required>
+        <input class="input" type="text" name="trailer_id" placeholder="e.g., T-1001" required value="{{ request.form.get('trailer_id','') }}">
         <div class="hint">External trailer identifier used in the field.</div>
       </div>
 
       <div class="field">
         <label>Job Name *</label>
-        <input class="input" type="text" name="job_name" required>
+        <input class="input" type="text" name="job_name" required value="{{ request.form.get('job_name','') }}">
       </div>
 
       <div class="field">
         <label>Job Number *</label>
-        <input class="input" type="text" name="job_number" required>
+        <input class="input" type="text" name="job_number" required value="{{ request.form.get('job_number','') }}">
       </div>
 
-      <input type="hidden" name="location" value="">
+      <input type="hidden" name="location" value="{{ request.form.get('location','') }}">
 
       <div class="field">
         <label>Tooling List *</label>
         <!-- IMPORTANT: name must match backend -> tooling_list_name -->
+        {% set selected = request.form.get('tooling_list_name','') %}
         <select name="tooling_list_name" class="input" required id="tooling_list_name">
-          <option value="" disabled selected>Select a list</option>
-          <option value="Standard Trailer">Standard Trailer</option>
-          <option value="Gang Box">Gang Box</option>
-          <option value="Semi Trailer">Semi Trailer</option>
-          <option value="Utility Trailer">Utility Trailer</option>
+          <option value="" disabled {{ ''==selected and 'selected' or '' }}>Select a list</option>
+          <option value="Standard Trailer" {{ 'Standard Trailer'==selected and 'selected' or '' }}>Standard Trailer</option>
+          <option value="Gang Box"         {{ 'Gang Box'==selected and 'selected' or '' }}>Gang Box</option>
+          <option value="Semi Trailer"     {{ 'Semi Trailer'==selected and 'selected' or '' }}>Semi Trailer</option>
+          <option value="Utility Trailer"  {{ 'Utility Trailer'==selected and 'selected' or '' }}>Utility Trailer</option>
         </select>
       </div>
 
+      <!-- FIXED: single canonical LN-25 field matching backend/helper & headers -->
       <div class="field">
-  <label for="ln_25s">LN-25</label>
-  <input
-    class="input"
-    id="ln_25s"
-    type="text"
-    name="ln_25s"
-    placeholder="Serial Numbers"
-    oninput="this.form.querySelector('input[name=&quot;lN-25s&quot;]').value = this.value"
-  >
-  <!-- Back-compat alias: keeps older name populated automatically -->
-  <input type="hidden" name="lN-25s" value="">
-</div>
-</div>
-
+        <label for="ln_25s">LN-25</label>
+        <input
+          class="input"
+          id="ln_25s"
+          type="text"
+          name="ln_25s"
+          placeholder="Serial Numbers (comma-separated)"
+          value="{{ request.form.get('ln_25s','') }}"
+        >
+        <div class="hint">Example: 12345, 67890</div>
+      </div>
+    </div>
 
     <!-- Extra Tooling (credit-back) -->
     <hr style="margin:16px 0">
     <label style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-      <input type="checkbox" name="enable_credit_back" value="1">
+      <input type="checkbox" name="enable_credit_back" value="1" {{ '1'==request.form.get('enable_credit_back') and 'checked' or '' }}>
       Add Extra Tooling (credit-back)
     </label>
 
@@ -111,6 +111,7 @@
     const addBtn = document.getElementById('add-extra');
 
     function toggleExtra() {
+      if (!wrap) return;
       wrap.style.display = cb && cb.checked ? 'block' : 'none';
     }
 
