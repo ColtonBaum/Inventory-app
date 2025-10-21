@@ -81,22 +81,10 @@
       <div><strong>Tooling List:</strong> {{ trailer.tooling_list_name }}</div>
       <div><strong>Assigned User:</strong> {{ trailer.assigned_user or '—' }}</div>
 
-      {# LN-25 with wide fallbacks + inline save when editable #}
+      {# LN-25 display-only with broad fallbacks #}
       {% set ln25 = trailer.ln_25s or trailer.ln_25 or trailer.ln25 or trailer.lN_25s
                     or trailer.LN_25 or trailer.LN25 or trailer.LN_25s or trailer.ln25s %}
-      <div>
-        <strong>LN-25:</strong>
-        {% if read_only %}
-          {{ ln25 or '—' }}
-        {% else %}
-          <form action="{{ url_for('inventory.update_ln25', trailer_id=trailer.id) }}" method="POST"
-                style="display:inline-flex; gap:8px; align-items:center; margin-left:6px;">
-            <input type="text" name="ln_25s" value="{{ ln25 or '' }}" placeholder="LN-25…"
-                   style="padding:6px 8px; border:1px solid var(--border); border-radius:8px; font-size:14px; width:180px;">
-            <button class="btn ghost" style="padding:6px 10px; font-size:14px;">Save</button>
-          </form>
-        {% endif %}
-      </div>
+      <div><strong>LN-25:</strong> {{ ln25 or '—' }}</div>
     </div>
   </div>
 
@@ -169,7 +157,7 @@
                       <input type="checkbox" name="{{ num }}_status_redtag" value="Red Tag" {% if ex_redtag %}checked{% endif %} {% if read_only %}disabled{% endif %} />
                       Red Tag
                     </label>
-                    <div class="note note-redtag" {% if ex_redtag %}style="display:block"{% endif %}>
+                    <div class="note note-redtag" {% if ex_redtag %}style="display:block"%>
                       <input type="text" name="{{ num }}_note_redtag" placeholder="Red tag notes…" value="{{ note_redtag }}" {% if read_only %}readonly{% endif %} />
                     </div>
 
