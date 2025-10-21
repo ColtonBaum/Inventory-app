@@ -7,40 +7,41 @@ from utils.invoice_generator import generate_invoice
 
 trailer_assignment_bp = Blueprint('trailer_assignment', __name__)
 
-# ----------------------------------------------------------------------------- 
-# LN-25 helpers (normalize form keys, write to whichever Trailer attr exists)
-# -----------------------------------------------------------------------------
-_LN25_FORM_KEYS = (
-    'ln_25s', 'ln_25', 'ln25', 'lN-25s', 'lN_25s', 'LN_25', 'LN25', 'LN_25s', 'ln25s'
-)
-_LN25_ATTRS = (
-    'ln_25s', 'ln_25', 'ln25', 'lN_25s', 'LN_25', 'LN25', 'LN_25s', 'ln25s'
-)
+# ---- LN-25 helpers (normalize form keys, write to whatever attribute exists) ----
+LN25_FORM_KEYS = [
+    "ln_25s", "ln_25", "ln25",
+    "LN_25", "LN25", "LN_25s",
+    "ln25s", "lN-25s"  # historical alias from older form
+]
+
+LN25_ATTRS_ON_MODEL = [
+    "ln_25s", "ln_25", "ln25",
+    "lN_25s", "LN_25", "LN25",
+    "LN_25s", "ln25s"
+]
 
 def _get_ln25_from_form(form) -> str | None:
-    for k in _LN25_FORM_KEYS:
-        v = (form.get(k) or '').strip()
-        if v:
-            return v
+    for k in LN25_FORM_KEYS:
+        v = form.get(k)
+        if v is not None:
+            sv = str(v).strip()
+            if sv:
+                return sv
     return None
 
-def _apply_ln25_to_model(trailer_obj: Trailer, value: str | None) -> None:
+def _apply_ln25_to_model(obj: Trailer, value: str | None) -> str | None:
+    """Write value to the first LN-25 attribute that actually exists on the model.
+       Returns the attribute name used, or None if nothing matched.
+    """
     if not value:
-        return
-    for attr in _LN25_ATTRS:
-        if hasattr(trailer_obj, attr):
-            setattr(trailer_obj, attr, value)
-            try:
-                current_app.logger.debug(f"[LN25] Stored on Trailer.{attr} = {value!r}")
-            except Exception:
-                pass
-            return
-    try:
-        current_app.logger.warning("[LN25] No matching Trailer attribute found; value not saved.")
-    except Exception:
-        pass
+        return None
+    for attr in LN25_ATTRS_ON_MODEL:
+        if hasattr(obj, attr):
+            setattr(obj, attr, value)
+            return attr
+    return None
 
-# ----------------------------------------------------------------------------- 
+# -----------------------------------------------------------------------------
 # CREATE / ASSIGN
 # -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/assign_trailer', methods=['GET', 'POST'], endpoint='assign_trailer')
@@ -58,14 +59,14 @@ def assign_trailer():
 
         ln25_val = _get_ln25_from_form(request.form)
 
-        # Extra Tooling (credit-back)
+        # Extra tooling (credit-back)
         extra_tooling_data = []
         if request.form.get('enable_credit_back'):
             raw        = request.form.to_dict(flat=False)
             names      = raw.get('extra_tooling_items[][item_name]', []) or raw.get('extra_tooling_items[item_name][]', [])
             numbers    = raw.get('extra_tooling_items[][item_number]', []) or raw.get('extra_tooling_items[item_number][]', [])
-            quantities = raw.get('extra_tooling_items[][quantity]', []) or raw.get('extra_tooling_items[quantity][]', [])
-            categories = raw.get('extra_tooling_items[][category]', []) or raw.get('extra_tooling_items[category][]', [])
+            quantities = raw.get('extra_tooling_items[][quantity]', [])   or raw.get('extra_tooling_items[quantity][]', [])
+            categories = raw.get('extra_tooling_items[][category]', [])   or raw.get('extra_tooling_items[category][]', [])
             for i in range(max(len(names), len(numbers), len(quantities), len(categories))):
                 name = names[i] if i < len(names) else ''
                 num  = numbers[i] if i < len(numbers) else ''
@@ -95,8 +96,8 @@ def assign_trailer():
             foreman_name=foreman_name
         )
 
-        # Persist LN-25 to whichever Trailer column exists
-        _apply_ln25_to_model(t, ln25_val)
+        used_attr = _apply_ln25_to_model(t, ln25_val)
+        current_app.logger.info(f"[ASSIGN] LN-25 form='{ln25_val}' -> model_attr='{used_attr}' (trailer not yet committed)")
 
         db.session.add(t)
         db.session.commit()
@@ -106,7 +107,7 @@ def assign_trailer():
     list_options = list(tooling_lists.keys())
     return render_template('assign_trailer.html', list_options=list_options)
 
-# ----------------------------------------------------------------------------- 
+# -----------------------------------------------------------------------------
 # UPDATE (compat metadata)
 # -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>', methods=['POST'], strict_slashes=False)
@@ -124,18 +125,19 @@ def update_trailer_post(trailer_id):
     tooling_list    = (request.form.get('tooling_list_name') or '').strip() or t.tooling_list_name
     status          = (request.form.get('status') or '').strip() or t.status
 
-    # Normalize & apply LN-25
     ln25_val = _get_ln25_from_form(request.form)
-    _apply_ln25_to_model(t, ln25_val)
+    used_attr = _apply_ln25_to_model(t, ln25_val)
+    if ln25_val:
+        current_app.logger.info(f"[UPDATE META] LN-25 form='{ln25_val}' -> model_attr='{used_attr}' for trailer_id={t.id}")
 
-    # Extra Tooling (credit-back)
+    # Extra tooling (credit-back)
     extra_tooling_data = None
     if request.form.get('enable_credit_back'):
         raw        = request.form.to_dict(flat=False)
         names      = raw.get('extra_tooling_items[][item_name]', []) or raw.get('extra_tooling_items[item_name][]', [])
         numbers    = raw.get('extra_tooling_items[][item_number]', []) or raw.get('extra_tooling_items[item_number][]', [])
-        quantities = raw.get('extra_tooling_items[][quantity]', []) or raw.get('extra_tooling_items[quantity][]', [])
-        categories = raw.get('extra_tooling_items[][category]', []) or raw.get('extra_tooling_items[category][]', [])
+        quantities = raw.get('extra_tooling_items[][quantity]', [])   or raw.get('extra_tooling_items[quantity][]', [])
+        categories = raw.get('extra_tooling_items[][category]', [])   or raw.get('extra_tooling_items[category][]', [])
         rows = []
         for i in range(max(len(names), len(numbers), len(quantities), len(categories))):
             name = names[i] if i < len(names) else ''
@@ -154,7 +156,6 @@ def update_trailer_post(trailer_id):
                 })
         extra_tooling_data = rows
 
-    # Apply meta updates
     t.job_name = job_name
     t.job_number = job_number
     t.location = location
@@ -170,7 +171,7 @@ def update_trailer_post(trailer_id):
     flash('Trailer updated.', 'success')
     return redirect(f'/trailer/{t.id}')
 
-# ----------------------------------------------------------------------------- 
+# -----------------------------------------------------------------------------
 # UPDATE (submission) — use checkbox + text note fields as the per-status qty
 # -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update', methods=['POST'], strict_slashes=False)
@@ -183,8 +184,11 @@ def trailer_update(trailer_id):
     if submitted_by:
         trailer.assigned_user = submitted_by
 
-    # LN-25 passthrough (normalize & apply)
-    _apply_ln25_to_model(trailer, _get_ln25_from_form(request.form))
+    # LN-25 passthrough (if present anywhere)
+    ln25_val = _get_ln25_from_form(request.form)
+    used_attr = _apply_ln25_to_model(trailer, ln25_val)
+    if ln25_val:
+        current_app.logger.info(f"[UPDATE SUBMIT] LN-25 form='{ln25_val}' -> model_attr='{used_attr}' for trailer_id={trailer.id}")
 
     # Optional meta passthroughs
     if 'location' in request.form:
