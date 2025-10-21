@@ -158,7 +158,7 @@
                       <input type="checkbox" name="{{ num }}_status_redtag" value="Red Tag" {% if ex_redtag %}checked{% endif %} {% if read_only %}disabled{% endif %} />
                       Red Tag
                     </label>
-                    <!-- FIXED: add {% endif %} here -->
+                    
                     <div class="note note-redtag" {% if ex_redtag %}style="display:block"{% endif %}>
                       <input type="text" name="{{ num }}_note_redtag" placeholder="Red tag notes…" value="{{ note_redtag }}" {% if read_only %}readonly{% endif %} />
                     </div>
