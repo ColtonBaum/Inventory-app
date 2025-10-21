@@ -60,7 +60,8 @@
   }
   .actions-sticky .btn { text-align:center; }
   #expandAll, #collapseAll { padding:10px 14px; font-size:16px; }
-  @media (min-width:1100px){ .wrap .bd { padding:16px 18px 100px; } }
+  @media (min-width:1100px){ .wrap .bd { padding:16px 18px 100px; }
+  }
   .toast {
     position: fixed; right: 14px; bottom: 14px; background:#111827; color:#fff;
     padding:10px 12px; border-radius:10px; font-size:14px; opacity:0; pointer-events:none;
@@ -157,7 +158,8 @@
                       <input type="checkbox" name="{{ num }}_status_redtag" value="Red Tag" {% if ex_redtag %}checked{% endif %} {% if read_only %}disabled{% endif %} />
                       Red Tag
                     </label>
-                    <div class="note note-redtag" {% if ex_redtag %}style="display:block"%>
+                    <!-- FIXED: add {% endif %} here -->
+                    <div class="note note-redtag" {% if ex_redtag %}style="display:block"{% endif %}>
                       <input type="text" name="{{ num }}_note_redtag" placeholder="Red tag notes…" value="{{ note_redtag }}" {% if read_only %}readonly{% endif %} />
                     </div>
 
@@ -198,7 +200,7 @@
                     </div>
                     <div class="qty">
                       <div class="label">Quantity (expected)</div>
-                      <input type="number" name="cb_{{ loop.index0 }}_quantity" value="{{ item.quantity }}" {% if read_only %}readonly tabindex="-1"{% endif %} inputmode="numeric" />
+                      <input type="number" name="cb_{{ loop.index0 }}_quantity" value="{{ item.quantity }}" {% if read_only %}readonly tabindex="-1{% endif %}" inputmode="numeric" />
                     </div>
                   </div>
 
