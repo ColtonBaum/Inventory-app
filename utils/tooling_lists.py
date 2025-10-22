@@ -53,8 +53,13 @@ def normalize_list(list_obj: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 # Back-compat alias for any older imports/usages in your codebase
-def _normalize_tooling_list(list_obj: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _normalize_tooling_list(list_obj, list_name=None):
+    """
+    Back-compat shim.
+    Accepts (items) or (items, name). 'name' is ignored.
+    """
     return normalize_list(list_obj)
+
 
 
 
