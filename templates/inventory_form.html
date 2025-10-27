@@ -89,8 +89,9 @@
   <div class="hd">
     <h2>Inventory Form – Trailer #{{ trailer.id }}</h2>
 
-    {# LN-25 display-only with broad fallbacks #}
-    {% set ln25 = trailer.ln_25s
+    {# --- LN-25 detection with extra aliases; if it's a list/JSON, join nicely --- #}
+    {% set ln25_raw =
+      trailer.ln_25s
       or trailer.ln_25
       or trailer.ln25
       or trailer.lN_25s
@@ -101,7 +102,13 @@
       or trailer.ln_25_serial
       or trailer.ln25_serial
       or trailer.ln_25_serials
-      or trailer.ln25_serials %}
+      or trailer.ln25_serials
+    %}
+    {% if ln25_raw is sequence and (ln25_raw is not string) %}
+      {% set ln25_text = (ln25_raw|reject('equalto','')|list)|join(', ') %}
+    {% else %}
+      {% set ln25_text = ln25_raw %}
+    {% endif %}
 
     <!-- Clean header -->
     <div class="meta-clean">
@@ -122,14 +129,12 @@
 
       <div>
         <span class="k">LN-25</span>
-        <span class="v" id="ln25-header-val">{{ ln25 or '—' }}</span>
+        <span class="v" id="ln25-header-val">{{ ln25_text or '—' }}</span>
       </div>
 
       <div>
         <span class="k">Trailer ID</span>
-        <span class="v">
-          {{ trailer.tool_trailer_id or trailer.trailer_id or trailer.id }}
-        </span>
+        <span class="v">{{ trailer.tool_trailer_id or trailer.trailer_id or trailer.id }}</span>
       </div>
     </div>
   </div>
@@ -144,10 +149,10 @@
         <div class="hint">This name will appear as the Assigned User on the dashboard and invoices.</div>
       </div>
 
-      {# Inline LN-25 editor: saves via existing trailer_update, no DB change #}
+      {# Inline LN-25 editor: saved by trailer_update via LN25_FORM_KEYS #}
       <div class="name-field">
         <label class="label">LN-25 (serials)</label><br/>
-        <input type="text" name="LN_25" value="{{ ln25 or '' }}" placeholder="e.g., 12345, 67890" />
+        <input type="text" name="LN_25" value="{{ ln25_text or '' }}" placeholder="e.g., 12345, 67890" />
         <div class="hint">Set/update LN-25 here so the header and pull list show it.</div>
       </div>
       {% endif %}
