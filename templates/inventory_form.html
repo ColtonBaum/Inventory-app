@@ -89,16 +89,16 @@
   <div class="hd">
     <h2>Inventory Form – Trailer #{{ trailer.id }}</h2>
 
-    {# --- LN-25 detection with extra aliases; if it's a list/JSON, join nicely --- #}
+    {# LN-25 display-only. If model stored a list/JSON, join it nicely. #}
     {% set ln25_raw =
       trailer.ln_25s
       or trailer.ln_25
       or trailer.ln25
-      or trailer.lN_25s
+      or trailer.ln25s
       or trailer.LN_25
       or trailer.LN25
       or trailer.LN_25s
-      or trailer.ln25s
+      or trailer.lN_25s
       or trailer.ln_25_serial
       or trailer.ln25_serial
       or trailer.ln_25_serials
@@ -110,7 +110,7 @@
       {% set ln25_text = ln25_raw %}
     {% endif %}
 
-    <!-- Clean header -->
+    <!-- Clean header (read-only) -->
     <div class="meta-clean">
       <div>
         <span class="k">Job Name</span>
@@ -129,7 +129,7 @@
 
       <div>
         <span class="k">LN-25</span>
-        <span class="v" id="ln25-header-val">{{ ln25_text or '—' }}</span>
+        <span class="v">{{ ln25_text or '—' }}</span>
       </div>
 
       <div>
@@ -140,20 +140,12 @@
   </div>
 
   <div class="bd">
-    <!-- add id so autosave can target the form -->
     <form id="inventory-form" method="POST" action="{{ url_for('trailer_assignment.trailer_update', trailer_id=trailer.id) }}">
       {% if not read_only %}
       <div class="name-field">
         <label class="label">Your Name (who is filling this out)</label><br/>
         <input type="text" name="assigned_user" value="{{ trailer.assigned_user or '' }}" placeholder="e.g., Jane Smith" autocomplete="name" />
         <div class="hint">This name will appear as the Assigned User on the dashboard and invoices.</div>
-      </div>
-
-      {# Inline LN-25 editor: saved by trailer_update via LN25_FORM_KEYS #}
-      <div class="name-field">
-        <label class="label">LN-25 (serials)</label><br/>
-        <input type="text" name="LN_25" value="{{ ln25_text or '' }}" placeholder="e.g., 12345, 67890" />
-        <div class="hint">Set/update LN-25 here so the header and pull list show it.</div>
       </div>
       {% endif %}
 
@@ -215,7 +207,6 @@
                       <input type="checkbox" name="{{ num }}_status_redtag" value="Red Tag" {% if ex_redtag %}checked{% endif %} {% if read_only %}disabled{% endif %} />
                       Red Tag
                     </label>
-                    
                     <div class="note note-redtag" {% if ex_redtag %}style="display:block"{% endif %}>
                       <input type="text" name="{{ num }}_note_redtag" placeholder="Red tag notes…" value="{{ note_redtag }}" {% if read_only %}readonly{% endif %} />
                     </div>
@@ -355,26 +346,17 @@
       const noteRedtag  = itemEl.querySelector('.note-redtag');
 
       if (missing) {
-        const syncMissing = ()=>{ if(noteMissing) noteMissing.style.display = missing.checked ? 'block' : 'none'; };
+        const syncMissing = () => { if (noteMissing) noteMissing.style.display = missing.checked ? 'block' : 'none'; };
         missing.addEventListener('change', syncMissing);
         syncMissing();
       }
       if (redtag) {
-        const syncRed = ()=>{ if(noteRedtag) noteRedtag.style.display = redtag.checked ? 'block' : 'none'; };
+        const syncRed = () => { if (noteRedtag) noteRedtag.style.display = redtag.checked ? 'block' : 'none'; };
         redtag.addEventListener('change', syncRed);
         syncRed();
       }
     }
     document.querySelectorAll('.item').forEach(wireItem);
-
-    /* Live-sync LN-25 input to header value */
-    const ln25Input = document.querySelector('input[name="LN_25"]');
-    const ln25Header = document.getElementById('ln25-header-val');
-    if (ln25Input && ln25Header) {
-      const sync = () => { ln25Header.textContent = ln25Input.value.trim() || '—'; };
-      ln25Input.addEventListener('input', sync);
-      sync();
-    }
   });
 </script>
 

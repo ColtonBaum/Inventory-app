@@ -7,45 +7,26 @@ from utils.invoice_generator import generate_invoice
 
 trailer_assignment_bp = Blueprint('trailer_assignment', __name__)
 
-# ---- LN-25 helpers (normalize form keys, write to whatever attribute exists) ----
-LN25_FORM_KEYS = [
-    # common
-    "ln_25s", "ln_25", "ln25",
-    "LN_25", "LN25", "LN_25s", "ln25s",
-    # historical typos/aliases
-    "lN-25s", "lN_25s",
-    # "serial" style keys sometimes used on forms
-    "ln_25_serial", "ln25_serial", "ln_25_serials", "ln25_serials"
-]
-
-# Any attribute names your Trailer model might actually have
-LN25_ATTRS_ON_MODEL = [
-    "ln_25s", "ln_25", "ln25",
-    "lN_25s", "LN_25", "LN25", "LN_25s", "ln25s",
-    # serial variants commonly seen
-    "ln_25_serial", "ln25_serial", "ln_25_serials", "ln25_serials",
-]
+# -----------------------------------------------------------------------------
+# LN-25: single canonical field ("ln_25s") used on both the form and the model
+# -----------------------------------------------------------------------------
+LN25_FIELD = "ln_25s"   # <input name="ln_25s"> on assign_trailer.html
+LN25_ATTR  = "ln_25s"   # Trailer.ln_25s in your model
 
 def _get_ln25_from_form(form) -> str | None:
-    for k in LN25_FORM_KEYS:
-        v = form.get(k)
-        if v is not None:
-            sv = str(v).strip()
-            if sv:
-                return sv
-    return None
+    val = (form.get(LN25_FIELD) or "").strip()
+    return val or None
 
 def _apply_ln25_to_model(obj: Trailer, value: str | None) -> str | None:
-    """
-    Write value to the first LN-25 attribute that actually exists on the model.
-    Returns the attribute name used, or None if nothing matched or value is empty.
-    """
+    """Write to Trailer.ln_25s only, if present."""
     if not value:
         return None
-    for attr in LN25_ATTRS_ON_MODEL:
-        if hasattr(obj, attr):
-            setattr(obj, attr, value)
-            return attr
+    if hasattr(obj, LN25_ATTR):
+        setattr(obj, LN25_ATTR, value)
+        return LN25_ATTR
+    current_app.logger.warning(
+        f"[LN25] Trailer missing attr '{LN25_ATTR}'. Value not saved."
+    )
     return None
 
 
@@ -133,6 +114,7 @@ def update_trailer_post(trailer_id):
     tooling_list    = (request.form.get('tooling_list_name') or '').strip() or t.tooling_list_name
     status          = (request.form.get('status') or '').strip() or t.status
 
+    # This page likely won't post LN-25 anymore, but keeping for compatibility:
     ln25_val = _get_ln25_from_form(request.form)
     used_attr = _apply_ln25_to_model(t, ln25_val)
     if ln25_val:
@@ -180,7 +162,7 @@ def update_trailer_post(trailer_id):
     return redirect(f'/trailer/{t.id}')
 
 # -----------------------------------------------------------------------------
-# UPDATE (submission) — use checkbox + text note fields as the per-status qty
+# UPDATE (submission) — per-item statuses
 # -----------------------------------------------------------------------------
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update', methods=['POST'], strict_slashes=False)
 @trailer_assignment_bp.route('/trailer/<int:trailer_id>/update/', methods=['POST'], strict_slashes=False)
@@ -192,7 +174,7 @@ def trailer_update(trailer_id):
     if submitted_by:
         trailer.assigned_user = submitted_by
 
-    # LN-25 passthrough (if present anywhere)
+    # Keeping LN-25 passthrough for compatibility (inventory form no longer posts it)
     ln25_val = _get_ln25_from_form(request.form)
     used_attr = _apply_ln25_to_model(trailer, ln25_val)
     if ln25_val:
@@ -244,7 +226,6 @@ def trailer_update(trailer_id):
         is_redtag   = bool(f(f"{base}_status_redtag"))
         is_complete = bool(f(f"{base}_status_complete"))
 
-        # Text inputs carry the user-entered counts
         miss_qty = parse_qty_from_text(f(f"{base}_note_missing"))
         red_qty  = parse_qty_from_text(f(f"{base}_note_redtag"))
 
