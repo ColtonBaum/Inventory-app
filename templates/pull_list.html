@@ -7,8 +7,22 @@
     body { font-family: Arial, sans-serif; }
     .header { margin-bottom: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
     .header h2 { margin: 0 0 8px; }
-    .meta { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 24px; }
-    .meta div { font-size: 14px; }
+
+    /* Compact, cleaned meta header */
+    .meta-clean {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px 18px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    @media (max-width: 1100px) { .meta-clean { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+    @media (max-width: 700px)  { .meta-clean { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    .k { font-size: 12px; color: #6b7280; display: block; }
+    .v { font-weight: 600; color: #111827; word-break: break-word; }
+
     h3.section-title { margin: 18px 0 8px; }
     h4.cat { margin: 10px 0 6px; font-size: 15px; }
     table { border-collapse: collapse; width: 100%; margin-top: 8px; }
@@ -29,24 +43,35 @@
 <body>
   <div class="header">
     <h2>Pull List <span class="pill">Trailer #{{ trailer.id }}</span></h2>
-    <div class="meta">
-      <div><strong>Job Name:</strong> {{ trailer.job_name }}</div>
-      <div><strong>Job Number:</strong> {{ trailer.job_number }}</div>
-      <div><strong>Location:</strong> {{ trailer.location }}</div>
-      <div><strong>Foreman:</strong> {{ trailer.foreman_name }}</div>
-      <div><strong>Tooling List:</strong> {{ trailer.tooling_list_name }}</div>
-      <div><strong>Assigned User:</strong> {{ trailer.assigned_user or '—' }}</div>
 
-      {# LN-25 serials (supports multiple possible attribute names) #}
-      {% set ln25 = trailer.ln_25s or trailer.lN_25s or trailer.ln25 or trailer.LN_25 %}
-      <div><strong>LN-25:</strong> {{ ln25 or '—' }}</div>
+    {# LN-25 serials (supports multiple possible attribute names) #}
+    {% set ln25 = trailer.ln_25s or trailer.ln_25 or trailer.ln25 or trailer.lN_25s
+                  or trailer.LN_25 or trailer.LN25 or trailer.LN_25s or trailer.ln25s %}
 
-      {# External trailer ID if different from db PK #}
-      {% if trailer.tool_trailer_id %}
-        <div><strong>Tool Trailer ID:</strong> {{ trailer.tool_trailer_id }}</div>
-      {% elif trailer.trailer_id and trailer.trailer_id != trailer.id %}
-        <div><strong>Trailer ID (ext):</strong> {{ trailer.trailer_id }}</div>
-      {% endif %}
+    {# Display Trailer ID with sane fallbacks (external if present, else db id) #}
+    {% set display_tid = trailer.tool_trailer_id or trailer.trailer_id or trailer.id %}
+
+    <div class="meta-clean">
+      <div>
+        <span class="k">Job Name</span>
+        <span class="v">{{ trailer.job_name or '—' }}</span>
+      </div>
+      <div>
+        <span class="k">Job Number</span>
+        <span class="v">{{ trailer.job_number or '—' }}</span>
+      </div>
+      <div>
+        <span class="k">Tooling List</span>
+        <span class="v">{{ trailer.tooling_list_name or trailer.inventory_type or '—' }}</span>
+      </div>
+      <div>
+        <span class="k">LN-25</span>
+        <span class="v">{{ ln25 or '—' }}</span>
+      </div>
+      <div>
+        <span class="k">Trailer ID</span>
+        <span class="v">{{ display_tid }}</span>
+      </div>
     </div>
   </div>
 
