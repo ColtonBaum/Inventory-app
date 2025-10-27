@@ -9,15 +9,21 @@ trailer_assignment_bp = Blueprint('trailer_assignment', __name__)
 
 # ---- LN-25 helpers (normalize form keys, write to whatever attribute exists) ----
 LN25_FORM_KEYS = [
+    # common
     "ln_25s", "ln_25", "ln25",
-    "LN_25", "LN25", "LN_25s",
-    "ln25s", "lN-25s"  # historical alias from older form
+    "LN_25", "LN25", "LN_25s", "ln25s",
+    # historical typos/aliases
+    "lN-25s", "lN_25s",
+    # "serial" style keys sometimes used on forms
+    "ln_25_serial", "ln25_serial", "ln_25_serials", "ln25_serials"
 ]
 
+# Any attribute names your Trailer model might actually have
 LN25_ATTRS_ON_MODEL = [
     "ln_25s", "ln_25", "ln25",
-    "lN_25s", "LN_25", "LN25",
-    "LN_25s", "ln25s"
+    "lN_25s", "LN_25", "LN25", "LN_25s", "ln25s",
+    # serial variants commonly seen
+    "ln_25_serial", "ln25_serial", "ln_25_serials", "ln25_serials",
 ]
 
 def _get_ln25_from_form(form) -> str | None:
@@ -30,8 +36,9 @@ def _get_ln25_from_form(form) -> str | None:
     return None
 
 def _apply_ln25_to_model(obj: Trailer, value: str | None) -> str | None:
-    """Write value to the first LN-25 attribute that actually exists on the model.
-       Returns the attribute name used, or None if nothing matched.
+    """
+    Write value to the first LN-25 attribute that actually exists on the model.
+    Returns the attribute name used, or None if nothing matched or value is empty.
     """
     if not value:
         return None
@@ -40,6 +47,7 @@ def _apply_ln25_to_model(obj: Trailer, value: str | None) -> str | None:
             setattr(obj, attr, value)
             return attr
     return None
+
 
 # -----------------------------------------------------------------------------
 # CREATE / ASSIGN

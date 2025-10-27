@@ -90,25 +90,47 @@
     <h2>Inventory Form – Trailer #{{ trailer.id }}</h2>
 
     {# LN-25 display-only with broad fallbacks #}
-    {% set ln25 = trailer.ln_25s or trailer.ln_25 or trailer.ln25 or trailer.lN_25s
-                  or trailer.LN_25 or trailer.LN25 or trailer.LN_25s or trailer.ln25s %}
+    {% set ln25 = trailer.ln_25s
+      or trailer.ln_25
+      or trailer.ln25
+      or trailer.lN_25s
+      or trailer.LN_25
+      or trailer.LN25
+      or trailer.LN_25s
+      or trailer.ln25s
+      or trailer.ln_25_serial
+      or trailer.ln25_serial
+      or trailer.ln_25_serials
+      or trailer.ln25_serials %}
 
     <!-- Clean header -->
     <div class="meta-clean">
-      <div><span class="k">Job Name</span>
-           <span class="v">{{ trailer.job_name or '—' }}</span></div>
+      <div>
+        <span class="k">Job Name</span>
+        <span class="v">{{ trailer.job_name or '—' }}</span>
+      </div>
 
-      <div><span class="k">Job Number</span>
-           <span class="v">{{ trailer.job_number or '—' }}</span></div>
+      <div>
+        <span class="k">Job Number</span>
+        <span class="v">{{ trailer.job_number or '—' }}</span>
+      </div>
 
-      <div><span class="k">Tooling List</span>
-           <span class="v">{{ trailer.tooling_list_name or trailer.inventory_type or '—' }}</span></div>
+      <div>
+        <span class="k">Tooling List</span>
+        <span class="v">{{ trailer.tooling_list_name or trailer.inventory_type or '—' }}</span>
+      </div>
 
-      <div><span class="k">LN-25</span>
-           <span class="v">{{ ln25 or '—' }}</span></div>
+      <div>
+        <span class="k">LN-25</span>
+        <span class="v" id="ln25-header-val">{{ ln25 or '—' }}</span>
+      </div>
 
-      <div><span class="k">Trailer ID</span>
-           <span class="v">{{ trailer.trailer_id or trailer.id }}</span></div>
+      <div>
+        <span class="k">Trailer ID</span>
+        <span class="v">
+          {{ trailer.tool_trailer_id or trailer.trailer_id or trailer.id }}
+        </span>
+      </div>
     </div>
   </div>
 
@@ -120,6 +142,13 @@
         <label class="label">Your Name (who is filling this out)</label><br/>
         <input type="text" name="assigned_user" value="{{ trailer.assigned_user or '' }}" placeholder="e.g., Jane Smith" autocomplete="name" />
         <div class="hint">This name will appear as the Assigned User on the dashboard and invoices.</div>
+      </div>
+
+      {# Inline LN-25 editor: saves via existing trailer_update, no DB change #}
+      <div class="name-field">
+        <label class="label">LN-25 (serials)</label><br/>
+        <input type="text" name="LN_25" value="{{ ln25 or '' }}" placeholder="e.g., 12345, 67890" />
+        <div class="hint">Set/update LN-25 here so the header and pull list show it.</div>
       </div>
       {% endif %}
 
@@ -332,6 +361,15 @@
       }
     }
     document.querySelectorAll('.item').forEach(wireItem);
+
+    /* Live-sync LN-25 input to header value */
+    const ln25Input = document.querySelector('input[name="LN_25"]');
+    const ln25Header = document.getElementById('ln25-header-val');
+    if (ln25Input && ln25Header) {
+      const sync = () => { ln25Header.textContent = ln25Input.value.trim() || '—'; };
+      ln25Input.addEventListener('input', sync);
+      sync();
+    }
   });
 </script>
 
