@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Billing — Pricing{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2>Pricing Management</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <form method="GET" style="display:flex;gap:6px;">
+        <input class="form-input" type="text" name="q" value="{{ q }}" placeholder="Search item…" style="font-size:13px;padding:7px 10px;width:200px;">
+        <button class="btn btn-ghost btn-sm" type="submit">Search</button>
+        {% if q %}<a class="btn btn-ghost btn-sm" href="{{ url_for('billing.pricing') }}">Clear</a>{% endif %}
+      </form>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('billing.billing_dashboard') }}">Back to Billing</a>
+    </div>
+  </div>
+  <div class="card-body" style="padding:0;">
+    <form method="POST">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Item Number</th>
+              <th>Item Name</th>
+              <th>Unit Price ($)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td class="text-muted text-sm">{{ row.item_number }}</td>
+              <td style="font-weight:600;">
+                {{ row.item_name }}
+                <input type="hidden" name="name_{{ row.item_number }}" value="{{ row.item_name }}">
+              </td>
+              <td>
+                <input class="form-input" type="number" step="0.01" min="0"
+                  name="price_{{ row.item_number }}"
+                  value="{{ '%.2f' | format(row.price) }}"
+                  style="width:110px;font-size:13px;padding:6px 8px;">
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-muted" style="text-align:center;padding:32px;">No items found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if rows %}
+      <div style="padding:16px 20px;">
+        <button class="btn btn-success" type="submit">Save All Prices</button>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}

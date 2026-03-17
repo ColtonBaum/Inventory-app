@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Billing Login{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:400px;margin:60px auto;">
+  <div class="card-header">
+    <h2>Billing Access</h2>
+  </div>
+  <div class="card-body">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}" style="margin-bottom:14px;padding:10px 14px;border-radius:8px;background:{% if cat=='danger' %}#fee2e2{% else %}#dbeafe{% endif %};color:{% if cat=='danger' %}#991b1b{% else %}#1e40af{% endif %};font-size:14px;">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    <form method="POST">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>Password</label>
+        <input class="form-input" type="password" name="password" autofocus placeholder="Enter billing password">
+      </div>
+      <button class="btn btn-primary" type="submit" style="width:100%;">Log In</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
