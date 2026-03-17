@@ -16,23 +16,18 @@ inventory_bp = Blueprint('inventory', __name__)
 
 # ---------- Helpers ----------
 def _apply_ln25_from_form(trailer, form):
-    """
-    Accept common LN-25 field aliases from forms and write to whichever Trailer
-    attribute actually exists in your model. No DB migration required.
-    """
-    incoming = (
-        form.get('ln_25s') or form.get('ln_25') or form.get('ln25') or
-        form.get('LN_25') or form.get('LN25') or form.get('LN_25s') or ''
-    )
-    incoming = (incoming or '').strip()
-    if not incoming:
-        return
+    """Write LN-25 from form to the canonical trailer.ln_25s field."""
+    incoming = (form.get('ln_25s') or form.get('ln_25') or form.get('ln25') or '').strip()
+    if incoming:
+        trailer.ln_25s = incoming
 
-    # Try common attribute names; stop at the first one this model has.
-    for attr in ['ln_25s', 'ln_25', 'ln25', 'lN_25s', 'LN_25', 'LN25', 'LN_25s', 'ln25s']:
-        if hasattr(trailer, attr):
-            setattr(trailer, attr, incoming)
-            break
+
+def _apply_notes_from_form(trailer, form):
+    """Write notes from form to trailer.notes."""
+    notes = (form.get('notes') or form.get('trailer_notes') or
+             form.get('trailer_notes_hidden') or '').strip()
+    if notes:
+        trailer.notes = notes
 
 
 def _week_range(dt: datetime):
@@ -67,6 +62,10 @@ def dashboard():
     inventory_type = request.args.get('inventory_type')
     if inventory_type:
         query = query.filter(Trailer.inventory_type == inventory_type)
+
+    tooling_list_name = request.args.get('tooling_list_name')
+    if tooling_list_name:
+        query = query.filter(Trailer.tooling_list_name == tooling_list_name)
 
     trailers = query.order_by(desc(Trailer.id)).all()
     return render_template('dashboard.html', trailers=trailers)
@@ -124,7 +123,7 @@ def view_invoices():
         grouped_invoices=grouped_invoices
     )
 
-# NEW: Delete an invoice (removes DB row and file if present)
+# Delete an invoice (removes DB row and file if present)
 @inventory_bp.route('/invoice/<int:invoice_id>/delete', methods=['POST'])
 def delete_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
@@ -146,10 +145,6 @@ def delete_invoice(invoice_id):
 # ---------- Add / Edit / Delete Trailer (meta) ----------
 @inventory_bp.route('/trailer/add', methods=['GET', 'POST'])
 def add_trailer():
-    """
-    Optional meta add route (separate from assign flow).
-    Stores extra_tooling consistently as item_name/item_number/quantity.
-    """
     if request.method == 'POST':
         tooling_items = []
         names = request.form.getlist('tool_name')
@@ -177,8 +172,8 @@ def add_trailer():
             extra_tooling=tooling_items
         )
 
-        # Capture LN-25 from the form into whichever attribute exists on Trailer
         _apply_ln25_from_form(trailer, request.form)
+        _apply_notes_from_form(trailer, request.form)
 
         db.session.add(trailer)
         db.session.commit()
@@ -213,8 +208,14 @@ def edit_trailer(trailer_id):
         trailer.assigned_user = request.form.get('assigned_user') or trailer.assigned_user
         trailer.extra_tooling = tooling_items
 
-        # Capture/overwrite LN-25 from the form
+        # Capture/overwrite LN-25 and notes from the form
         _apply_ln25_from_form(trailer, request.form)
+        _apply_notes_from_form(trailer, request.form)
+
+        # Handle status if present
+        status = request.form.get('status')
+        if status:
+            trailer.status = status
 
         db.session.commit()
         flash('Trailer details updated.', 'success')
@@ -242,13 +243,8 @@ def update_ln25(trailer_id):
 # ---------- Inventory Form (GET only: start -> In Progress) ----------
 @inventory_bp.route('/trailer/<int:trailer_id>', methods=['GET'])
 def inventory_form(trailer_id):
-    """
-    Renders the inventory form. When opened from Pending, mark as In Progress.
-    Actual submission is posted to `trailer_assignment.trailer_update`.
-    """
     trailer = Trailer.query.get_or_404(trailer_id)
 
-    # Resolve list name robustly, then fetch items
     list_name = (trailer.tooling_list_name or trailer.inventory_type or "").strip()
     tooling_list = get_tooling_list(list_name) or []
     current_app.logger.info(f"[INV_FORM] trailer={trailer.id} list_name='{list_name}' items={len(tooling_list)}")
@@ -303,7 +299,6 @@ def view_form(trailer_id):
 def pull_list(trailer_id):
     trailer = Trailer.query.get_or_404(trailer_id)
 
-    # All responses for this trailer
     all_responses = (InventoryResponse.query
                      .filter(InventoryResponse.trailer_id == trailer_id)
                      .all())
@@ -322,7 +317,6 @@ def pull_list(trailer_id):
         if r.status in ("Missing", "Red Tag"):
             grouped[category][key][r.status] += qty
 
-    # convert to template-friendly list: [(category, [rows...]), ...]
     grouped_flagged = []
     for category, items_map in grouped.items():
         rows = []
@@ -335,19 +329,15 @@ def pull_list(trailer_id):
             })
         rows.sort(key=lambda x: (x["item_name"] or "").lower())
         grouped_flagged.append((category, rows))
-    # stable sort by category name
     grouped_flagged.sort(key=lambda pair: (pair[0] or "").lower())
 
     # --- Extras: show ALL items with Assigned/Missing/RedTag/Complete ---
-    # Build assigned quantities from trailer.extra_tooling
-    assigned_map = {}  # (item_number, item_name) -> assigned_qty
+    assigned_map = {}
     for it in (trailer.extra_tooling or []):
         key = ((it.get('item_number') or '').strip(), (it.get('item_name') or '').strip())
         assigned_map[key] = int(it.get('quantity') or 0)
 
-    # Aggregate extra responses by status
     extra_counts = defaultdict(lambda: {"assigned": 0, "Missing": 0, "Red Tag": 0, "Complete": 0})
-    # seed from assigned_map so even items without responses appear
     for key, qty in assigned_map.items():
         extra_counts[key]["assigned"] = qty
 
@@ -360,7 +350,6 @@ def pull_list(trailer_id):
                 qty = 0
             if r.status in ("Missing", "Red Tag", "Complete"):
                 extra_counts[key][r.status] += qty
-            # if an extra item is only in responses (not in assigned_map), keep assigned=0
             extra_counts[key]["assigned"] = max(extra_counts[key].get("assigned", 0), assigned_map.get(key, 0))
 
     extras_rows = []
@@ -375,17 +364,13 @@ def pull_list(trailer_id):
         })
     extras_rows.sort(key=lambda x: (x["item_name"] or "").lower())
 
-    # Fallback legacy rows
-    rows_main = []
-    rows_extra = []
-
     return render_template(
         'pull_list.html',
         trailer=trailer,
         grouped_flagged=grouped_flagged,
         extras_rows=extras_rows,
-        rows=rows_main,
-        extra_rows=rows_extra
+        rows=[],
+        extra_rows=[]
     )
 
 @inventory_bp.route('/invoice/<int:invoice_id>/download')
@@ -410,10 +395,12 @@ def edit_submission(trailer_id):
     current_app.logger.info(f"[INV_EDIT] trailer={trailer.id} list_name='{list_name}' items={len(tooling_list)}")
 
     if request.method == 'POST':
-        # accept either 'assigned_user' or legacy 'submitted_by'
         who = (request.form.get('assigned_user') or request.form.get('submitted_by') or "").strip()
         if who:
             trailer.assigned_user = who
+
+        # Save notes
+        _apply_notes_from_form(trailer, request.form)
 
         # Clear previous responses & invoices
         InventoryResponse.query.filter_by(trailer_id=trailer.id).delete()
@@ -423,7 +410,6 @@ def edit_submission(trailer_id):
         responses = []
         flagged_items = []
 
-        # Re-collect regular tooling responses
         for item in tooling_list:
             item_number = item['Item Number']
             item_name = item['Item Name']
@@ -455,14 +441,13 @@ def edit_submission(trailer_id):
         db.session.add_all(responses)
         db.session.commit()
 
-        # Recreate invoice (or empty record)
         if flagged_items:
             invoice_path = generate_invoice(trailer.id, flagged_items) or ""
             db.session.add(Invoice(trailer_id=trailer.id, file_path=invoice_path))
         else:
             db.session.add(Invoice(trailer_id=trailer.id, file_path=""))
 
-        # Extra tooling (credit-back) — collect ALL statuses; category 'Extra Tooling'
+        # Extra tooling (credit-back)
         extra_responses = []
         credit_back_items = trailer.extra_tooling or []
         for i, item in enumerate(credit_back_items):

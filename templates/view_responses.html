@@ -1,24 +1,55 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Inventory Audit - Trailer #{{ trailer.id }}</title>
-</head>
-<body>
-    <h2>Audit for Trailer #{{ trailer.id }} — {{ trailer.job_name }}</h2>
-    <a href="{{ url_for('inventory.dashboard') }}">Back to Dashboard</a>
-    <ul>
-        {% for r in responses %}
-            <li>
-                <strong>{{ r.item_name }} (#{{ r.item_number }})</strong> —
-                Status: {{ r.status }} |
-                Qty: {{ r.quantity }} |
-                Category: {{ r.category }}<br>
-                Notes: {{ r.note or 'N/A' }}<br>
-                Timestamp: {{ r.created_at.strftime('%Y-%m-%d %H:%M') }}
-                [<a href="{{ url_for('inventory.edit_response', response_id=r.id) }}">Edit</a>]
-            </li>
-            <hr>
-        {% endfor %}
-    </ul>
-</body>
-</html>
+{% extends "base.html" %}
+{% block title %}Audit — Trailer #{{ trailer.id }}{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2>Audit — {{ trailer.trailer_id or ('Trailer #' ~ trailer.id) }}</h2>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('inventory.dashboard') }}">Back to Dashboard</a>
+  </div>
+  <div class="card-body">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Part #</th>
+            <th>Status</th>
+            <th>Qty</th>
+            <th>Category</th>
+            <th>Notes</th>
+            <th>Timestamp</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in responses %}
+          <tr>
+            <td style="font-weight:600;">{{ r.item_name }}</td>
+            <td class="text-muted text-sm">{{ r.item_number }}</td>
+            <td>
+              <span class="status
+                {% if r.status == 'Complete' %}status-completed
+                {% elif r.status == 'Missing' %}status-review
+                {% elif r.status == 'Red Tag' %}status-review
+                {% else %}status-pending{% endif %}">
+                {{ r.status }}
+              </span>
+            </td>
+            <td>{{ r.quantity }}</td>
+            <td class="text-muted text-sm">{{ r.category }}</td>
+            <td class="text-muted text-sm">{{ r.note or '—' }}</td>
+            <td class="text-muted text-sm">{{ r.created_at.strftime('%m/%d %H:%M') if r.created_at else '—' }}</td>
+            <td>
+              <a class="btn btn-ghost btn-sm" href="{{ url_for('inventory.edit_response', response_id=r.id) }}">Edit</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="text-muted" style="text-align:center;padding:32px;">No responses recorded.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

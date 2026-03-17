@@ -1,29 +1,41 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Edit Inventory Response</title>
-</head>
-<body>
-    <h2>Edit Inventory Entry for {{ response.item_name }} (#{{ response.item_number }})</h2>
+{% extends "base.html" %}
+{% block title %}Edit Response — {{ response.item_name }}{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:560px;margin:0 auto;">
+  <div class="card-header">
+    <h2>Edit Item Response</h2>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('inventory.dashboard') }}">Back</a>
+  </div>
+  <div class="card-body">
+    <p class="text-muted text-sm" style="margin-bottom:16px;">
+      <strong>{{ response.item_name }}</strong> &nbsp;·&nbsp; #{{ response.item_number }}
+    </p>
     <form method="POST">
-        <label>Status:
-            <select name="status">
-                <option value="Complete" {% if response.status == 'Complete' %}selected{% endif %}>Complete</option>
-                <option value="Missing" {% if response.status == 'Missing' %}selected{% endif %}>Missing</option>
-                <option value="Red Tag" {% if response.status == 'Red Tag' %}selected{% endif %}>Red Tag</option>
-                <option value="Not Returned" {% if response.status == 'Not Returned' %}selected{% endif %}>Not Returned</option>
-            </select>
-        </label><br><br>
-
-        <label>Quantity:
-            <input type="number" name="quantity" value="{{ response.quantity }}">
-        </label><br><br>
-
-        <label>Note:<br>
-            <textarea name="note">{{ response.note }}</textarea>
-        </label><br><br>
-
-        <button type="submit">Update</button>
+      <div class="form-grid form-grid-2 mb-4">
+        <div class="form-group">
+          <label>Status</label>
+          <select class="form-select" name="status">
+            <option value="Complete"      {% if response.status == 'Complete' %}selected{% endif %}>Complete</option>
+            <option value="Missing"       {% if response.status == 'Missing' %}selected{% endif %}>Missing</option>
+            <option value="Red Tag"       {% if response.status == 'Red Tag' %}selected{% endif %}>Red Tag</option>
+            <option value="Not Returned"  {% if response.status == 'Not Returned' %}selected{% endif %}>Not Returned</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quantity</label>
+          <input class="form-input" type="number" name="quantity" min="0" value="{{ response.quantity or 0 }}">
+        </div>
+      </div>
+      <div class="form-group mb-4">
+        <label>Note</label>
+        <textarea class="form-textarea" name="note" rows="3" placeholder="Any details...">{{ response.note or '' }}</textarea>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-success" type="submit">Save Changes</button>
+        <a class="btn btn-ghost" href="{{ url_for('inventory.dashboard') }}">Cancel</a>
+      </div>
     </form>
-</body>
-</html>
+  </div>
+</div>
+{% endblock %}

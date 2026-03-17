@@ -1,71 +1,70 @@
-<!-- inventory_app/templates/trailer_invoices.html -->
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Trailer #{{ trailer.id }} — Invoices</title>
-    <style>
-        body { font-family: Arial, sans-serif; }
-        .tabs { margin-bottom: 20px; border-bottom: 2px solid #ccc; display: flex; gap: 10px; }
-        .tab {
-            padding: 10px 20px; text-decoration: none; border: 1px solid #ccc; border-bottom: none;
-            background-color: #f1f1f1; border-top-left-radius: 6px; border-top-right-radius: 6px; color: black;
-        }
-        .tab:hover { background-color: #ddd; }
-        .tab.active { background-color: white; border-bottom: 2px solid white; font-weight: bold; }
+{% extends "base.html" %}
+{% block title %}Invoices — Trailer #{{ trailer.id }}{% endblock %}
 
-        .box { background: #fafafa; border: 1px solid #eee; padding: 12px; margin-bottom: 16px; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f7f7f7; }
-        .muted { color: #666; font-style: italic; }
-    </style>
-</head>
-<body>
-    <h2>Invoices for Trailer #{{ trailer.id }}</h2>
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2>Invoices — {{ trailer.trailer_id or ('Trailer #' ~ trailer.id) }}</h2>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('inventory.view_invoices') }}">All Invoices</a>
+  </div>
+  <div class="card-body">
 
-    <!-- Tabs -->
-    <div class="tabs">
-        <a href="{{ url_for('inventory.dashboard') }}"
-           class="tab {% if request.endpoint == 'inventory.dashboard' %}active{% endif %}">🏠 Dashboard</a>
-        <a href="{{ url_for('inventory.view_invoices') }}"
-           class="tab {% if request.endpoint == 'inventory.view_invoices' %}active{% endif %}">📄 Invoices</a>
+    <!-- Trailer Summary -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;padding:14px 0;border-bottom:1px solid var(--border);margin-bottom:20px;">
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Job</div>
+        <div style="font-size:14px;font-weight:600;margin-top:2px;">{{ trailer.job_name or '—' }}{% if trailer.job_number %} ({{ trailer.job_number }}){% endif %}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Location</div>
+        <div style="font-size:14px;font-weight:600;margin-top:2px;">{{ trailer.location or '—' }}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Assigned</div>
+        <div style="font-size:14px;font-weight:600;margin-top:2px;">{{ trailer.assigned_user or 'Unassigned' }}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:.3px;">Status</div>
+        <div style="margin-top:4px;">
+          <span class="status
+            {% if trailer.status == 'Pending' %}status-pending
+            {% elif trailer.status == 'In Progress' %}status-progress
+            {% elif trailer.status == 'Completed' %}status-completed
+            {% elif trailer.status == 'Needs Review' %}status-review
+            {% endif %}">{{ trailer.status }}</span>
+        </div>
+      </div>
     </div>
 
-    <div class="box">
-        <strong>Job:</strong> {{ trailer.job_name or '—' }}
-        {% if trailer.job_number %} ({{ trailer.job_number }}){% endif %}<br>
-        <strong>Location:</strong> {{ trailer.location or '—' }}<br>
-        <strong>Assigned User:</strong> {{ trailer.assigned_user or 'Unassigned' }}<br>
-        <strong>Status:</strong> {{ trailer.status }}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Created</th>
+            <th>File</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for inv in invoices %}
+          <tr>
+            <td>{{ inv.created_at.strftime('%Y-%m-%d %H:%M') if inv.created_at else '—' }}</td>
+            <td class="text-muted text-sm">{{ inv.file_path or '—' }}</td>
+            <td>
+              {% if inv.file_path %}
+                <a class="btn btn-primary btn-sm" href="{{ url_for('inventory.download_invoice', invoice_id=inv.id) }}">Download</a>
+              {% else %}
+                <span class="text-muted text-sm">No file</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="text-muted" style="text-align:center;padding:32px;">No invoices for this trailer yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
 
-    {% if not invoices %}
-        <p class="muted">No invoices for this trailer yet.</p>
-    {% else %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Created</th>
-                    <th>File</th>
-                    <th>Download</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for inv in invoices %}
-                <tr>
-                    <td>{{ inv.created_at.strftime('%Y-%m-%d %H:%M') if inv.created_at else '' }}</td>
-                    <td>{{ inv.file_path or '—' }}</td>
-                    <td>
-                        {% if inv.file_path %}
-                            <a href="{{ url_for('inventory.download_invoice', invoice_id=inv.id) }}">Download</a>
-                        {% else %}
-                            <span class="muted">No file</span>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    {% endif %}
-</body>
-</html>
+  </div>
+</div>
+{% endblock %}

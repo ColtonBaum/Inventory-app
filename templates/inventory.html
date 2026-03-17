@@ -1,96 +1,102 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Inventory for Trailer #{{ trailer.id }}</title>
-    <style>
-        .item-detail { display: flex; gap: 15px; align-items: flex-start; margin-bottom: 12px; }
-        .item-detail span { min-width: 220px; display: inline-block; }
-        .item-detail input[type="number"],
-        .item-detail input[type="text"] { padding: 4px; }
-        .chk { display: flex; align-items: center; gap: 6px; }
-        .note { display: none; }
-    </style>
-</head>
-<body>
-    <h2>Inventory Form for Trailer #{{ trailer.id }}</h2>
+{% extends "base.html" %}
+{% block title %}Inventory — Trailer #{{ trailer.id }}{% endblock %}
 
-    <!-- Job Info -->
-    <div>
-        <p><strong>Job Name:</strong> {{ trailer.job_name }}</p>
-        <p><strong>Job Number:</strong> {{ trailer.job_number }}</p>
-        <p><strong>Location:</strong> {{ trailer.location }}</p>
-        <p><strong>Foreman:</strong> {{ trailer.foreman_name }}</p>
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h2>Inventory — {{ trailer.trailer_id or ('Trailer #' ~ trailer.id) }}</h2>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('inventory.dashboard') }}">Back</a>
+  </div>
+  <div class="card-body">
+
+    <!-- Trailer Info -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 16px;padding:14px 18px;border:1px solid var(--border);border-radius:var(--radius);background:#f9fafb;margin-bottom:20px;">
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;">Job Name</div>
+        <div style="font-size:15px;font-weight:600;margin-top:2px;">{{ trailer.job_name or '—' }}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;">Job Number</div>
+        <div style="font-size:15px;font-weight:600;margin-top:2px;">{{ trailer.job_number or '—' }}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;">Location</div>
+        <div style="font-size:15px;font-weight:600;margin-top:2px;">{{ trailer.location or '—' }}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text-secondary);font-weight:600;text-transform:uppercase;">Foreman</div>
+        <div style="font-size:15px;font-weight:600;margin-top:2px;">{{ trailer.foreman_name or '—' }}</div>
+      </div>
     </div>
 
     <form method="POST">
-        <!-- Tooling Items -->
-        <h3>Tooling List</h3>
-        {% for item in inventory_data %}
-            <div class="item-detail">
-                <span>{{ item.itemName }} (#{{ item.itemNumber }}) — Expected: {{ item.quantity }}</span>
-                
-                <div class="chk">
-                    <input type="checkbox" name="{{ item.itemNumber }}_status_missing" value="Missing">
-                    Missing
-                </div>
-                <input type="text" name="{{ item.itemNumber }}_note_missing" placeholder="Missing notes…">
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;">Tooling List</h3>
 
-                <div class="chk">
-                    <input type="checkbox" name="{{ item.itemNumber }}_status_redtag" value="Red Tag">
-                    Red Tag
-                </div>
-                <input type="text" name="{{ item.itemNumber }}_note_redtag" placeholder="Red tag notes…">
+      {% for item in inventory_data %}
+      <div style="padding:14px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <div>
+            <div style="font-weight:600;font-size:15px;">{{ item.itemName }}</div>
+            <div style="font-size:13px;color:var(--text-secondary);">#{{ item.itemNumber }} &nbsp;·&nbsp; Expected: {{ item.quantity }}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:7px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" name="{{ item.itemNumber }}_status_complete" value="Complete" checked style="width:18px;height:18px;accent-color:var(--success);">
+            ✅ Complete
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" name="{{ item.itemNumber }}_status_missing" value="Missing" style="width:18px;height:18px;accent-color:var(--danger);">
+            ❌ Missing
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" name="{{ item.itemNumber }}_status_redtag" value="Red Tag" style="width:18px;height:18px;accent-color:var(--warning);">
+            🔴 Red Tag
+          </label>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">
+          <input class="form-input" type="text" name="{{ item.itemNumber }}_note_missing" placeholder="Missing notes..." style="max-width:300px;font-size:13px;padding:7px 10px;">
+          <input class="form-input" type="text" name="{{ item.itemNumber }}_note_redtag" placeholder="Red tag notes..." style="max-width:300px;font-size:13px;padding:7px 10px;">
+        </div>
+        <input type="hidden" name="{{ item.itemNumber }}_item_name" value="{{ item.itemName }}">
+        <input type="hidden" name="{{ item.itemNumber }}_category" value="{{ item.category or 'General' }}">
+      </div>
+      {% endfor %}
 
-                <div class="chk">
-                    <input type="checkbox" name="{{ item.itemNumber }}_status_complete" value="Complete" checked>
-                    Complete
-                </div>
+      {% if trailer.extra_tooling %}
+      <h3 style="font-size:16px;font-weight:700;margin:20px 0 12px;">Extra Tooling</h3>
+      {% for item in trailer.extra_tooling %}
+      <div style="padding:14px 0;border-bottom:1px solid var(--border);">
+        <div style="font-weight:600;font-size:15px;">{{ item.item_name or item.get('name','') }}</div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;">#{{ item.item_number or item.get('number','') }} &nbsp;·&nbsp; Expected: {{ item.quantity }}</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:7px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" name="cb_{{ loop.index0 }}_complete" value="Complete" style="width:18px;height:18px;accent-color:var(--success);">
+            ✅ Complete
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" name="cb_{{ loop.index0 }}_missing" value="Missing" style="width:18px;height:18px;accent-color:var(--danger);">
+            ❌ Missing
+          </label>
+          <label style="display:flex;align-items:center;gap:7px;font-size:14px;cursor:pointer;">
+            <input type="checkbox" name="cb_{{ loop.index0 }}_redtag" value="Red Tag" style="width:18px;height:18px;accent-color:var(--warning);">
+            🔴 Red Tag
+          </label>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;">
+          <input class="form-input" type="text" name="cb_{{ loop.index0 }}_note_missing" placeholder="Missing notes..." style="max-width:300px;font-size:13px;padding:7px 10px;">
+          <input class="form-input" type="text" name="cb_{{ loop.index0 }}_note_redtag" placeholder="Red tag notes..." style="max-width:300px;font-size:13px;padding:7px 10px;">
+        </div>
+        <input type="hidden" name="cb_{{ loop.index0 }}_item_name" value="{{ item.item_name or item.get('name','') }}">
+        <input type="hidden" name="cb_{{ loop.index0 }}_item_number" value="{{ item.item_number or item.get('number','') }}">
+      </div>
+      {% endfor %}
+      {% endif %}
 
-                <label>Qty:
-                    <input type="number" name="{{ item.itemNumber }}_quantity" min="0" value="{{ item.quantity }}">
-                </label>
-
-                <input type="hidden" name="{{ item.itemNumber }}_item_name" value="{{ item.itemName }}">
-                <input type="hidden" name="{{ item.itemNumber }}_category" value="{{ item.category or 'General' }}">
-            </div>
-        {% endfor %}
-
-        <!-- Extra Tooling Credit-Back -->
-        {% if trailer.extra_tooling %}
-            <h3>Extra Tooling</h3>
-            {% for item in trailer.extra_tooling %}
-                <div class="item-detail">
-                    <span>{{ item.name }} (#{{ item.number }}) — Expected: {{ item.quantity }}</span>
-
-                    <div class="chk">
-                        <input type="checkbox" name="cb_{{ loop.index0 }}_missing" value="Missing">
-                        Missing
-                    </div>
-                    <input type="text" name="cb_{{ loop.index0 }}_note_missing" placeholder="Missing notes…">
-
-                    <div class="chk">
-                        <input type="checkbox" name="cb_{{ loop.index0 }}_redtag" value="Red Tag">
-                        Red Tag
-                    </div>
-                    <input type="text" name="cb_{{ loop.index0 }}_note_redtag" placeholder="Red tag notes…">
-
-                    <div class="chk">
-                        <input type="checkbox" name="cb_{{ loop.index0 }}_complete" value="Complete" checked>
-                        Complete
-                    </div>
-
-                    <label>Qty Returned:
-                        <input type="number" name="cb_{{ loop.index0 }}_quantity" min="0" value="{{ item.quantity }}">
-                    </label>
-
-                    <input type="hidden" name="cb_{{ loop.index0 }}_item_name" value="{{ item.name }}">
-                    <input type="hidden" name="cb_{{ loop.index0 }}_item_number" value="{{ item.number }}">
-                </div>
-            {% endfor %}
-        {% endif %}
-
-        <br>
-        <button type="submit">Submit Inventory</button>
+      <div style="padding:16px 0;">
+        <button class="btn btn-success" type="submit">Submit Inventory</button>
+      </div>
     </form>
-</body>
-</html>
+  </div>
+</div>
+{% endblock %}

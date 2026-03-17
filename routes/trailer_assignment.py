@@ -82,7 +82,8 @@ def assign_trailer():
             assigned_user=assigned_user,
             status='Pending',
             extra_tooling=extra_tooling_data or None,
-            foreman_name=foreman_name
+            foreman_name=foreman_name,
+            notes=(request.form.get('notes') or '').strip() or None
         )
 
         used_attr = _apply_ln25_to_model(t, ln25_val)
@@ -114,7 +115,6 @@ def update_trailer_post(trailer_id):
     tooling_list    = (request.form.get('tooling_list_name') or '').strip() or t.tooling_list_name
     status          = (request.form.get('status') or '').strip() or t.status
 
-    # This page likely won't post LN-25 anymore, but keeping for compatibility:
     ln25_val = _get_ln25_from_form(request.form)
     used_attr = _apply_ln25_to_model(t, ln25_val)
     if ln25_val:
@@ -169,12 +169,10 @@ def update_trailer_post(trailer_id):
 def trailer_update(trailer_id):
     trailer = Trailer.query.get_or_404(trailer_id)
 
-    # Save who submitted (your form uses "assigned_user")
     submitted_by = (request.form.get('submitted_by') or request.form.get('assigned_user') or '').strip()
     if submitted_by:
         trailer.assigned_user = submitted_by
 
-    # Keeping LN-25 passthrough for compatibility (inventory form no longer posts it)
     ln25_val = _get_ln25_from_form(request.form)
     used_attr = _apply_ln25_to_model(trailer, ln25_val)
     if ln25_val:
@@ -189,6 +187,11 @@ def trailer_update(trailer_id):
         trailer.job_name = (request.form.get('job_name') or trailer.job_name or '').strip()
     if 'job_number' in request.form:
         trailer.job_number = (request.form.get('job_number') or trailer.job_number or '').strip()
+
+    # Save notes from the inventory form
+    notes_val = (request.form.get('trailer_notes_hidden') or request.form.get('trailer_notes') or '').strip()
+    if notes_val:
+        trailer.notes = notes_val
 
     # Fresh submission
     InventoryResponse.query.filter_by(trailer_id=trailer.id).delete()

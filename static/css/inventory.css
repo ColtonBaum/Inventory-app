@@ -1,51 +1,149 @@
 /* inventory_app/static/css/inventory.css */
+/* Legacy stylesheet — base.html handles the main design system via inline styles.
+   These rules apply to any legacy templates that don't extend base.html. */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
 body {
-    font-family: Arial, sans-serif;
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    background: #f1f3f5;
+    color: #1a1a2e;
     padding: 20px;
+    line-height: 1.55;
 }
 
-h2 {
-    margin-bottom: 20px;
-}
+h2 { font-size: 22px; font-weight: 700; margin-bottom: 16px; }
+h3 { font-size: 17px; font-weight: 700; margin-bottom: 12px; }
 
+a { color: #2563eb; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Card */
+.card {
+    background: #fff;
+    border: 1px solid #e2e5ea;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+    margin-bottom: 16px;
+}
+.card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #e2e5ea;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.card-body { padding: 20px; }
+
+/* Accordion */
 .accordion {
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
+    border: 1px solid #e2e5ea;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #fff;
+    margin-bottom: 16px;
 }
-
 .accordion h3 {
     margin: 0;
-    padding: 10px;
-    background-color: #eee;
+    padding: 14px 18px;
+    background: #f9fafb;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a2e;
+    border-bottom: 1px solid #e2e5ea;
 }
-
+.accordion h3:hover { background: #f1f3f5; }
 .accordion-body {
-    padding: 10px;
+    padding: 16px;
     display: none;
 }
+.accordion-body.open { display: block; }
 
+/* Item block */
 .item-block {
-    margin-bottom: 10px;
-    padding: 10px;
-    border-bottom: 1px solid #ddd;
+    padding: 14px 0;
+    border-bottom: 1px solid #e2e5ea;
 }
+.item-block:last-child { border-bottom: none; }
 
+/* Conditional inputs */
 .conditional-inputs {
     margin-top: 10px;
-    padding-left: 10px;
-    border-left: 2px solid #f00;
+    padding-left: 12px;
+    border-left: 3px solid #dc2626;
 }
 
-.hidden {
-    display: none;
-}
-
-button[type="submit"],
-button[type="button"] {
-    margin-top: 10px;
-    padding: 8px 16px;
-    font-size: 16px;
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid transparent;
     cursor: pointer;
+    text-decoration: none;
+    font-family: inherit;
+    transition: all .12s;
+    white-space: nowrap;
 }
+.btn-primary { background: #2563eb; color: #fff; }
+.btn-primary:hover { background: #1d4ed8; }
+.btn-success { background: #16a34a; color: #fff; }
+.btn-danger  { background: #dc2626; color: #fff; }
+.btn-ghost   { background: #fff; color: #1a1a2e; border-color: #e2e5ea; }
+.btn-ghost:hover { background: #f7f8fa; }
+.btn-sm { padding: 7px 12px; font-size: 13px; border-radius: 7px; }
+
+button[type="submit"], button[type="button"] {
+    cursor: pointer;
+    font-family: inherit;
+}
+
+/* Forms */
+.form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.form-group label { font-size: 13px; font-weight: 600; color: #5a6071; }
+
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+select,
+textarea {
+    padding: 10px 12px;
+    border: 1px solid #e2e5ea;
+    border-radius: 8px;
+    font-size: 15px;
+    font-family: inherit;
+    background: #fff;
+    color: #1a1a2e;
+    transition: border-color .15s, box-shadow .15s;
+}
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #93a3f8;
+    box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+
+/* Status chips */
+.status {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.status-pending   { background: #f3f4f6; color: #374151; }
+.status-progress  { background: #dbeafe; color: #1e40af; }
+.status-completed { background: #dcfce7; color: #166534; }
+.status-review    { background: #fef3c7; color: #92400e; }
+
+.hidden { display: none; }
