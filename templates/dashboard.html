@@ -112,6 +112,7 @@
                 {% else %}
                   <a class="btn small ghost" href="{{ url_for('inventory.view_form', trailer_id=trailer.id) }}">View Form</a>
                   <a class="btn small primary" href="{{ url_for('inventory.edit_submission', trailer_id=trailer.id) }}">Edit Submission</a>
+                  <a class="btn small ghost" href="{{ url_for('inventory.pull_list', trailer_id=trailer.id) }}">Pull List</a>
                 {% endif %}
 
                 <form method="POST"
