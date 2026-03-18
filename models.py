@@ -29,6 +29,8 @@ class Trailer(db.Model):
     tooling_list_name = db.Column(db.String(100), index=True)
 
     foreman_name = db.Column(db.String(100))
+    ln_25s = db.Column(db.String(120))
+    notes = db.Column(db.Text)
 
     # Relationships
     responses = db.relationship(
@@ -80,3 +82,15 @@ class Invoice(db.Model):
 
     def __repr__(self):
         return f"<Invoice id={self.id} trailer_id={self.trailer_id} created_at={self.created_at}>"
+
+
+class ItemPrice(db.Model):
+    __tablename__ = 'item_price'
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    item_name = db.Column(db.String(120))
+    price = db.Column(db.Float, nullable=False, default=0.0)
+
+    def __repr__(self):
+        return f"<ItemPrice item_number={self.item_number!r} price={self.price}>"
