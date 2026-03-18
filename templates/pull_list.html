@@ -1,199 +1,137 @@
-<!-- templates/pull_list.html -->
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Pull List – Trailer #{{ trailer.id }}</title>
-  <style>
-    body { font-family: Arial, sans-serif; }
-    .header { margin-bottom: 16px; border-bottom: 2px solid #ddd; padding-bottom: 8px; }
-    .header h2 { margin: 0 0 8px; }
+{% extends "base.html" %}
+{% block title %}Pull List – {{ trailer.job_name or ('Trailer #' ~ trailer.id) }}{% endblock %}
 
-    /* Compact, cleaned meta header */
-    .meta-clean {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 8px 18px;
-      border: 1px solid #e5e7eb;
-      border-radius: 10px;
-      padding: 10px 12px;
-      background: #fff;
-    }
-    @media (max-width: 1100px) { .meta-clean { grid-template-columns: repeat(3, minmax(0,1fr)); } }
-    @media (max-width: 700px)  { .meta-clean { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-    .k { font-size: 12px; color: #6b7280; display: block; }
-    .v { font-weight: 600; color: #111827; word-break: break-word; }
+{% block content %}
+{% set ln25 = trailer.ln_25s %}
+{% set display_tid = trailer.trailer_id or trailer.id %}
 
-    h3.section-title { margin: 18px 0 8px; }
-    h4.cat { margin: 10px 0 6px; font-size: 15px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
-    th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
-    th { background: #f7f7f7; }
-    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #eef2ff; border: 1px solid #c7d2fe; }
-    .muted { color: #666; font-size: 12px; }
-    .footer-note { margin-top: 12px; font-size: 12px; color: #666; }
-    .actions { margin-top: 16px; }
-    .actions a, .actions button {
-      margin-right: 8px; padding: 8px 12px; text-decoration: none;
-      background: #0d6efd; color: white; border-radius: 6px; border: none; display: inline-block;
-    }
-    .actions a.secondary, .actions button.secondary { background: #6c757d; }
-    @media print { .actions { display: none; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h2>Pull List <span class="pill">Trailer #{{ trailer.id }}</span></h2>
-
-    {# LN-25 serials (supports multiple possible attribute names) #}
-    {% set ln25 = trailer.ln_25s or trailer.ln_25 or trailer.ln25 or trailer.lN_25s
-                  or trailer.LN_25 or trailer.LN25 or trailer.LN_25s or trailer.ln25s %}
-
-    {# Display Trailer ID with sane fallbacks (external if present, else db id) #}
-    {% set display_tid = trailer.tool_trailer_id or trailer.trailer_id or trailer.id %}
-
-    <div class="meta-clean">
-      <div>
-        <span class="k">Job Name</span>
-        <span class="v">{{ trailer.job_name or '—' }}</span>
-      </div>
-      <div>
-        <span class="k">Job Number</span>
-        <span class="v">{{ trailer.job_number or '—' }}</span>
-      </div>
-      <div>
-        <span class="k">Tooling List</span>
-        <span class="v">{{ trailer.tooling_list_name or trailer.inventory_type or '—' }}</span>
-      </div>
-      <div>
-        <span class="k">LN-25</span>
-        <span class="v">{{ ln25 or '—' }}</span>
-      </div>
-      <div>
-        <span class="k">Trailer ID</span>
-        <span class="v">{{ display_tid }}</span>
-      </div>
+<div class="card">
+  <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+    <div>
+      <div style="font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Pull List</div>
+      <h2 style="margin:0;font-size:22px;">{{ trailer.job_name or '—' }}</h2>
+    </div>
+    <div class="actions-row">
+      <a class="btn ghost small" href="{{ url_for('inventory.edit_submission', trailer_id=trailer.id) }}">Edit Submission</a>
+      <button class="btn ghost small" onclick="window.print()">Print</button>
+      <a class="btn ghost small" href="{{ url_for('inventory.dashboard') }}">Dashboard</a>
     </div>
   </div>
 
-  {# -------- Main flagged items, grouped by Category (no accordion) -------- #}
-  {% if grouped_flagged is defined and grouped_flagged %}
-    <h3 class="section-title">Flagged Items (Grouped by Category)</h3>
-
-    {% for category, items in grouped_flagged %}
-      <h4 class="cat">{{ category }}</h4>
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 40%;">Item Name</th>
-            <th style="width: 20%;">Item #</th>
-            <th style="width: 20%;">Missing Qty</th>
-            <th style="width: 20%;">Red Tag Qty</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for it in items %}
-            <tr>
-              <td>{{ it.item_name }}</td>
-              <td>{{ it.item_number }}</td>
-              <td>{{ it.missing_qty or 0 }}</td>
-              <td>{{ it.redtag_qty or 0 }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    {% endfor %}
-    <div class="footer-note">Includes items marked Missing or Red Tag from the main inventory, grouped by category.</div>
-
-  {% elif rows and rows|length %}
-    {# Fallback to legacy flat list if grouped_flagged not provided #}
-    <h3 class="section-title">Flagged Items (Main Inventory)</h3>
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 40%;">Item Name</th>
-          <th style="width: 20%;">Item #</th>
-          <th style="width: 20%;">Missing Qty</th>
-          <th style="width: 20%;">Red Tag Qty</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-          <tr>
-            <td>{{ r.item_name }}</td>
-            <td>{{ r.item_number }}</td>
-            <td>{{ r.missing_qty or 0 }}</td>
-            <td>{{ r.redtag_qty or 0 }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <div class="footer-note">Only items marked Missing or Red Tag are shown.</div>
-  {% endif %}
-
-  {# -------- Extra Tooling (credit-back): show ALL items -------- #}
-  {% if extras_rows is defined and extras_rows %}
-    <h3 class="section-title">Extra Tooling (Credit-Back) — All Items</h3>
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 32%;">Item Name</th>
-          <th style="width: 18%;">Item #</th>
-          <th style="width: 12%;">Assigned</th>
-          <th style="width: 12%;">Missing</th>
-          <th style="width: 12%;">Red Tag</th>
-          <th style="width: 14%;">Complete</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in extras_rows %}
-          <tr>
-            <td>{{ r.item_name }}</td>
-            <td>{{ r.item_number }}</td>
-            <td>{{ r.assigned_qty or 0 }}</td>
-            <td>{{ r.missing_qty or 0 }}</td>
-            <td>{{ r.redtag_qty or 0 }}</td>
-            <td>{{ r.complete_qty or 0 }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <div class="footer-note">Shows all extra tooling assigned to this trailer, including items marked Complete.</div>
-
-  {% elif extra_rows and extra_rows|length %}
-    {# Fallback to legacy extras table (flagged only) #}
-    <h3 class="section-title">Extra Tooling (Credit-Back)</h3>
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 40%;">Item Name</th>
-          <th style="width: 20%;">Item #</th>
-          <th style="width: 20%;">Missing Qty</th>
-          <th style="width: 20%;">Red Tag Qty</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in extra_rows %}
-          <tr>
-            <td>{{ r.item_name }}</td>
-            <td>{{ r.item_number }}</td>
-            <td>{{ r.missing_qty or 0 }}</td>
-            <td>{{ r.redtag_qty or 0 }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    <div class="footer-note">Extra Tooling items reported as Missing or Red Tag are listed here.</div>
-  {% endif %}
-
-  {% if (not (grouped_flagged is defined and grouped_flagged) and not (rows and rows|length))
-        and (not (extras_rows is defined and extras_rows) and not (extra_rows and extra_rows|length)) %}
-    <p class="muted">No items to display.</p>
-  {% endif %}
-
-  <div class="actions">
-    <a href="{{ url_for('inventory.edit_submission', trailer_id=trailer.id) }}">Edit Submission</a>
-    <a class="secondary" href="{{ url_for('inventory.dashboard') }}">Back to Dashboard</a>
-    <button onclick="window.print()">Print</button>
+  <!-- Trailer meta -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px 16px;padding:14px 20px;border-bottom:1px solid var(--border);background:#f8fafc;">
+    <div>
+      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Job Number</div>
+      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ trailer.job_number or '—' }}</div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Tooling List</div>
+      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ trailer.tooling_list_name or trailer.inventory_type or '—' }}</div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">LN-25</div>
+      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ ln25 or '—' }}</div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Trailer ID</div>
+      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ display_tid }}</div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Assigned To</div>
+      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ trailer.assigned_user or '—' }}</div>
+    </div>
   </div>
-</body>
-</html>
+
+  <div class="card-body">
+
+    {# ---- Main flagged items grouped by category ---- #}
+    {% if grouped_flagged is defined and grouped_flagged %}
+      <h3 style="font-size:16px;font-weight:700;margin:0 0 14px;">Flagged Items</h3>
+
+      {% for category, items in grouped_flagged %}
+        <div style="margin-bottom:20px;">
+          <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--border);">{{ category }}</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            {% for it in items %}
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;">
+              <div>
+                <div style="font-weight:600;font-size:16px;">{{ it.item_name }}</div>
+                <div style="font-size:13px;color:var(--muted);">#{{ it.item_number }}</div>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                {% if it.missing_qty and it.missing_qty > 0 %}
+                  <span style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">
+                    Missing: {{ it.missing_qty }}
+                  </span>
+                {% endif %}
+                {% if it.redtag_qty and it.redtag_qty > 0 %}
+                  <span style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">
+                    Red Tag: {{ it.redtag_qty }}
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+
+    {% elif rows and rows|length %}
+      <h3 style="font-size:16px;font-weight:700;margin:0 0 14px;">Flagged Items</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        {% for r in rows %}
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;">
+          <div>
+            <div style="font-weight:600;font-size:16px;">{{ r.item_name }}</div>
+            <div style="font-size:13px;color:var(--muted);">#{{ r.item_number }}</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            {% if r.missing_qty and r.missing_qty > 0 %}
+              <span style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Missing: {{ r.missing_qty }}</span>
+            {% endif %}
+            {% if r.redtag_qty and r.redtag_qty > 0 %}
+              <span style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Red Tag: {{ r.redtag_qty }}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {# ---- Extra Tooling ---- #}
+    {% if extras_rows is defined and extras_rows %}
+      <h3 style="font-size:16px;font-weight:700;margin:24px 0 14px;">Extra Tooling (Credit-Back)</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        {% for r in extras_rows %}
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;">
+          <div>
+            <div style="font-weight:600;font-size:16px;">{{ r.item_name }}</div>
+            <div style="font-size:13px;color:var(--muted);">#{{ r.item_number }}</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            {% if r.complete_qty and r.complete_qty > 0 %}
+              <span style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Complete: {{ r.complete_qty }}</span>
+            {% endif %}
+            {% if r.missing_qty and r.missing_qty > 0 %}
+              <span style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Missing: {{ r.missing_qty }}</span>
+            {% endif %}
+            {% if r.redtag_qty and r.redtag_qty > 0 %}
+              <span style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Red Tag: {{ r.redtag_qty }}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if (not (grouped_flagged is defined and grouped_flagged)) and (not (rows and rows|length)) and (not (extras_rows is defined and extras_rows)) %}
+      <div style="text-align:center;padding:40px;color:var(--muted);">
+        <div style="font-size:40px;margin-bottom:8px;">✅</div>
+        <div style="font-size:18px;font-weight:600;">All items are Complete</div>
+        <div style="font-size:14px;margin-top:4px;">No missing or red-tagged items.</div>
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

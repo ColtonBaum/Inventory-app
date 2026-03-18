@@ -76,6 +76,7 @@ class Invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     trailer_id = db.Column(db.Integer, db.ForeignKey('trailer.id'), index=True, nullable=False)
     file_path = db.Column(db.String(255))
+    billed = db.Column(db.Boolean, nullable=False, server_default='false', default=False)
 
     # Timestamp (DB-side default)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False, index=True)

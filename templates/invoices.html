@@ -78,21 +78,29 @@
                 <th style="width: 10%;">Trailer #</th>
                 <th style="width: 18%;">Job Name</th>
                 <th style="width: 14%;">Job #</th>
-                <th style="width: 16%;">Location</th>
-                <th style="width: 12%;">Assignee</th>
-                <th style="width: 16%;">Actions</th>
+                <th style="width: 14%;">Location</th>
+                <th style="width: 10%;">Assignee</th>
+                <th style="width: 8%;">Billed</th>
+                <th style="width: 12%;">Actions</th>
               </tr>
             </thead>
             <tbody>
               {% for inv in invs %}
                 {% set t = trailers.get(inv.trailer_id) %}
-                <tr>
+                <tr {% if inv.billed %}style="background:#f0fdf4;"{% endif %}>
                   <td>{{ inv.created_at.strftime('%Y-%m-%d %H:%M') if inv.created_at else '—' }}</td>
                   <td><span class="pill">#{{ inv.trailer_id }}</span></td>
                   <td>{{ t.job_name if t else '—' }}</td>
                   <td>{{ t.job_number if t else '—' }}</td>
                   <td>{{ t.location if t else '—' }}</td>
                   <td>{{ t.assigned_user if t and t.assigned_user else '—' }}</td>
+                  <td>
+                    <form class="delete-form" method="POST" action="{{ url_for('inventory.toggle_billed', invoice_id=inv.id) }}">
+                      <button type="submit" class="btn {% if inv.billed %}billed{% else %}ghost{% endif %} btn-sm">
+                        {% if inv.billed %}✓ Billed{% else %}Mark Billed{% endif %}
+                      </button>
+                    </form>
+                  </td>
                   <td>
                     <div class="actions">
                       <a class="btn btn-sm" href="{{ url_for('inventory.pull_list', trailer_id=inv.trailer_id) }}">View Invoice</a>
@@ -122,21 +130,29 @@
               <th style="width: 10%;">Trailer #</th>
               <th style="width: 18%;">Job Name</th>
               <th style="width: 14%;">Job #</th>
-              <th style="width: 16%;">Location</th>
-              <th style="width: 12%;">Assignee</th>
-              <th style="width: 16%;">Actions</th>
+              <th style="width: 14%;">Location</th>
+              <th style="width: 10%;">Assignee</th>
+              <th style="width: 8%;">Billed</th>
+              <th style="width: 12%;">Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for inv in invoices %}
               {% set t = trailers.get(inv.trailer_id) %}
-              <tr>
+              <tr {% if inv.billed %}style="background:#f0fdf4;"{% endif %}>
                 <td>{{ inv.created_at.strftime('%Y-%m-%d %H:%M') if inv.created_at else '—' }}</td>
                 <td><span class="pill">#{{ inv.trailer_id }}</span></td>
                 <td>{{ t.job_name if t else '—' }}</td>
                 <td>{{ t.job_number if t else '—' }}</td>
                 <td>{{ t.location if t else '—' }}</td>
                 <td>{{ t.assigned_user if t and t.assigned_user else '—' }}</td>
+                <td>
+                  <form class="delete-form" method="POST" action="{{ url_for('inventory.toggle_billed', invoice_id=inv.id) }}">
+                    <button type="submit" class="btn {% if inv.billed %}billed{% else %}ghost{% endif %} btn-sm">
+                      {% if inv.billed %}✓ Billed{% else %}Mark Billed{% endif %}
+                    </button>
+                  </form>
+                </td>
                 <td>
                   <div class="actions">
                     <a class="btn btn-sm" href="{{ url_for('inventory.pull_list', trailer_id=inv.trailer_id) }}">View Invoice</a>

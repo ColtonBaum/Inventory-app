@@ -142,6 +142,13 @@ def delete_invoice(invoice_id):
     flash('Invoice deleted.', 'info')
     return redirect(url_for('inventory.view_invoices'))
 
+@inventory_bp.route('/invoice/<int:invoice_id>/toggle-billed', methods=['POST'])
+def toggle_billed(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    invoice.billed = not invoice.billed
+    db.session.commit()
+    return redirect(url_for('inventory.view_invoices'))
+
 # ---------- Add / Edit / Delete Trailer (meta) ----------
 @inventory_bp.route('/trailer/add', methods=['GET', 'POST'])
 def add_trailer():
