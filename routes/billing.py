@@ -461,13 +461,31 @@ def import_warehouse():
                     return headers.index(c)
             return None
 
-        col_num = find_col(['item number', 'item_number', 'item #', 'item no', 'number', 'part number', 'part #'])
-        col_name = find_col(['item name', 'item_name', 'name', 'description', 'desc'])
-        col_qty = find_col(['quantity', 'qty', 'on hand', 'quantity on hand', 'stock', 'qty on hand'])
-        col_price = find_col(['price', 'unit price', 'cost', 'unit cost', 'rate'])
+        col_num = find_col([
+            'item number', 'item_number', 'item #', 'item no', 'part number', 'part #',
+            'part no', 'sku', 'product number', 'product #', 'number', 'no', 'id',
+            'item id', 'product id', 'code', 'item code', 'part code',
+        ])
+        col_name = find_col([
+            'item name', 'item_name', 'product name', 'name', 'description', 'desc',
+            'item description', 'product description', 'title',
+        ])
+        col_qty = find_col([
+            'quantity', 'qty', 'on hand', 'quantity on hand', 'qty on hand',
+            'stock', 'stock on hand', 'inventory', 'count', 'available', 'balance',
+        ])
+        col_price = find_col([
+            'price', 'unit price', 'cost', 'unit cost', 'rate', 'each',
+            'unit cost ($)', 'price ($)', 'cost ($)', 'sell price', 'list price',
+        ])
 
         if col_num is None:
-            flash('Could not find "Item Number" column. Make sure your spreadsheet has a header row with "Item Number".', 'danger')
+            found = [h for h in headers if h]  # non-empty headers
+            flash(
+                f'Could not find an "Item Number" column. '
+                f'Headers found in your file: {", ".join(found) or "(none — is row 1 a header row?)"}',
+                'danger'
+            )
             return redirect(url_for('billing.import_warehouse'))
 
         added = updated = priced = 0
