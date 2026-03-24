@@ -310,6 +310,17 @@ def pull_list(trailer_id):
                      .filter(InventoryResponse.trailer_id == trailer_id)
                      .all())
 
+    # Build expected qty map from tooling list
+    list_name = (trailer.tooling_list_name or trailer.inventory_type or "").strip()
+    tooling_list = get_tooling_list(list_name) or []
+    expected_qty_map = {}
+    for item in tooling_list:
+        num = str(item.get('Item Number', '')).strip()
+        try:
+            expected_qty_map[num] = int(item.get('Quantity', 0))
+        except Exception:
+            expected_qty_map[num] = 0
+
     # --- Group main flagged items (Missing/Red Tag) by Category ---
     flagged = [r for r in all_responses if r.status in ("Missing", "Red Tag") and (r.category or '').strip().lower() != 'extra tooling']
 
@@ -331,6 +342,7 @@ def pull_list(trailer_id):
             rows.append({
                 "item_name": item_name,
                 "item_number": item_number,
+                "expected_qty": expected_qty_map.get(str(item_number), 0),
                 "missing_qty": counts.get("Missing", 0),
                 "redtag_qty": counts.get("Red Tag", 0),
             })

@@ -58,16 +58,15 @@
                 <div style="font-weight:600;font-size:16px;">{{ it.item_name }}</div>
                 <div style="font-size:13px;color:var(--muted);">#{{ it.item_number }}</div>
               </div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                {% if it.expected_qty %}
+                  <span style="background:#f1f5f9;color:#475569;border:1px solid var(--border);padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Expected: {{ it.expected_qty }}</span>
+                {% endif %}
                 {% if it.missing_qty and it.missing_qty > 0 %}
-                  <span style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">
-                    Missing: {{ it.missing_qty }}
-                  </span>
+                  <span style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Missing: {{ it.missing_qty }}</span>
                 {% endif %}
                 {% if it.redtag_qty and it.redtag_qty > 0 %}
-                  <span style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">
-                    Red Tag: {{ it.redtag_qty }}
-                  </span>
+                  <span style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Red Tag: {{ it.redtag_qty }}</span>
                 {% endif %}
               </div>
             </div>
@@ -85,7 +84,10 @@
             <div style="font-weight:600;font-size:16px;">{{ r.item_name }}</div>
             <div style="font-size:13px;color:var(--muted);">#{{ r.item_number }}</div>
           </div>
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            {% if r.expected_qty %}
+              <span style="background:#f1f5f9;color:#475569;border:1px solid var(--border);padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Expected: {{ r.expected_qty }}</span>
+            {% endif %}
             {% if r.missing_qty and r.missing_qty > 0 %}
               <span style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Missing: {{ r.missing_qty }}</span>
             {% endif %}
@@ -108,7 +110,8 @@
             <div style="font-weight:600;font-size:16px;">{{ r.item_name }}</div>
             <div style="font-size:13px;color:var(--muted);">#{{ r.item_number }}</div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <span style="background:#f1f5f9;color:#475569;border:1px solid var(--border);padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Assigned: {{ r.assigned_qty or 0 }}</span>
             {% if r.complete_qty and r.complete_qty > 0 %}
               <span style="background:#dcfce7;color:#166534;border:1px solid #86efac;padding:6px 14px;border-radius:999px;font-weight:700;font-size:15px;">Complete: {{ r.complete_qty }}</span>
             {% endif %}
