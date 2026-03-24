@@ -450,10 +450,20 @@ def import_warehouse():
             flash(f'Could not read Excel file: {e}', 'danger')
             return redirect(url_for('billing.import_warehouse'))
 
-        # Read header row and find column indices
+        # Scan up to 10 rows to find the actual header row
+        ITEM_NUM_CANDIDATES = {
+            'item number', 'item_number', 'item #', 'item no', 'part number', 'part #',
+            'part no', 'sku', 'product number', 'product #', 'number', 'no', 'id',
+            'item id', 'product id', 'code', 'item code', 'part code',
+        }
+        header_row_idx = None
         headers = []
-        for cell in ws[1]:
-            headers.append((cell.value or '').strip().lower())
+        for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
+            row_vals = [(str(c or '').strip().lower()) for c in row]
+            if any(v in ITEM_NUM_CANDIDATES for v in row_vals):
+                header_row_idx = row_idx
+                headers = row_vals
+                break
 
         def find_col(candidates):
             for c in candidates:
@@ -479,17 +489,26 @@ def import_warehouse():
             'unit cost ($)', 'price ($)', 'cost ($)', 'sell price', 'list price',
         ])
 
-        if col_num is None:
-            found = [h for h in headers if h]  # non-empty headers
+        if col_num is None or header_row_idx is None:
+            # Show all non-empty cell values from first 10 rows to help diagnose
+            sample = []
+            for row in ws.iter_rows(min_row=1, max_row=10, values_only=True):
+                for cell in row:
+                    v = str(cell or '').strip()
+                    if v and v not in sample:
+                        sample.append(v)
+                if len(sample) > 20:
+                    break
             flash(
-                f'Could not find an "Item Number" column. '
-                f'Headers found in your file: {", ".join(found) or "(none — is row 1 a header row?)"}',
+                f'Could not find an "Item Number" column in the first 10 rows. '
+                f'Values found: {", ".join(sample[:20]) or "(empty sheet)"}. '
+                f'Rename your item number column to "Item Number" or "Item #".',
                 'danger'
             )
             return redirect(url_for('billing.import_warehouse'))
 
         added = updated = priced = 0
-        for row in ws.iter_rows(min_row=2, values_only=True):
+        for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
             item_number = str(row[col_num] or '').strip()
             if not item_number:
                 continue
