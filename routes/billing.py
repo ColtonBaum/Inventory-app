@@ -3,7 +3,7 @@ from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, session, current_app, make_response, abort
 )
-from models import ItemPrice, Trailer, InventoryResponse
+from models import ItemPrice, Trailer, InventoryResponse, WarehouseProduct, WarehouseOrder, WarehouseOrderLine
 from database import db
 from utils.tooling_lists import get_tooling_list
 from functools import wraps
@@ -223,4 +223,175 @@ def generate_billing_invoice(trailer_id):
         line_items=line_items,
         total=total,
         now=datetime.now,
+    )
+
+
+# ---------- Warehouse Stock ----------
+@billing_bp.route('/warehouse')
+@billing_required
+def warehouse_inventory():
+    q = (request.args.get('q') or '').strip().lower()
+    products = WarehouseProduct.query.order_by(WarehouseProduct.item_name).all()
+    if q:
+        products = [p for p in products if q in (p.item_name or '').lower() or q in (p.item_number or '').lower()]
+    low_stock = [p for p in products if p.quantity_on_hand <= p.reorder_point]
+    return render_template('billing_inventory.html', products=products, low_stock=low_stock, q=q)
+
+
+@billing_bp.route('/warehouse/product/<int:product_id>/edit', methods=['GET', 'POST'])
+@billing_required
+def edit_product(product_id):
+    product = WarehouseProduct.query.get_or_404(product_id)
+    if request.method == 'POST':
+        product.item_name = request.form.get('item_name', product.item_name)
+        product.quantity_on_hand = int(request.form.get('quantity_on_hand', 0) or 0)
+        product.reorder_point = int(request.form.get('reorder_point', 0) or 0)
+        try:
+            product.unit_cost = float(request.form.get('unit_cost', 0) or 0)
+        except ValueError:
+            product.unit_cost = 0.0
+        db.session.commit()
+        flash('Product updated.', 'success')
+        return redirect(url_for('billing.warehouse_inventory'))
+    return render_template('billing_edit_product.html', product=product)
+
+
+@billing_bp.route('/warehouse/product/add', methods=['POST'])
+@billing_required
+def add_product():
+    item_number = (request.form.get('item_number') or '').strip()
+    if not item_number:
+        flash('Item number is required.', 'danger')
+        return redirect(url_for('billing.warehouse_inventory'))
+    existing = WarehouseProduct.query.filter_by(item_number=item_number).first()
+    if existing:
+        flash('A product with that item number already exists.', 'warning')
+        return redirect(url_for('billing.warehouse_inventory'))
+    p = WarehouseProduct(
+        item_number=item_number,
+        item_name=(request.form.get('item_name') or '').strip(),
+        quantity_on_hand=int(request.form.get('quantity_on_hand', 0) or 0),
+        reorder_point=int(request.form.get('reorder_point', 0) or 0),
+        unit_cost=float(request.form.get('unit_cost', 0) or 0),
+    )
+    db.session.add(p)
+    db.session.commit()
+    flash('Product added.', 'success')
+    return redirect(url_for('billing.warehouse_inventory'))
+
+
+# ---------- Warehouse Orders ----------
+@billing_bp.route('/warehouse/orders')
+@billing_required
+def warehouse_orders():
+    status_filter = request.args.get('status', '')
+    q = WarehouseOrder.query.order_by(WarehouseOrder.created_at.desc())
+    if status_filter:
+        q = q.filter(WarehouseOrder.status == status_filter)
+    orders = q.all()
+    trailers = {t.id: t for t in Trailer.query.all()}
+    return render_template('billing_orders.html', orders=orders, trailers=trailers, status_filter=status_filter)
+
+
+@billing_bp.route('/warehouse/orders/new', methods=['GET', 'POST'])
+@billing_required
+def new_order():
+    if request.method == 'POST':
+        trailer_id_raw = request.form.get('trailer_id') or None
+        trailer_id = int(trailer_id_raw) if trailer_id_raw else None
+        notes = (request.form.get('notes') or '').strip()
+        order = WarehouseOrder(trailer_id=trailer_id, status='Pending', notes=notes)
+        db.session.add(order)
+        db.session.flush()  # get order.id
+
+        item_numbers = request.form.getlist('item_number')
+        item_names = request.form.getlist('item_name')
+        quantities = request.form.getlist('quantity')
+        for num, name, qty_raw in zip(item_numbers, item_names, quantities):
+            num = num.strip()
+            if not num:
+                continue
+            try:
+                qty = int(qty_raw or 0)
+            except ValueError:
+                qty = 0
+            if qty <= 0:
+                continue
+            line = WarehouseOrderLine(order_id=order.id, item_number=num, item_name=name.strip(), quantity=qty)
+            db.session.add(line)
+        db.session.commit()
+        flash('Order created.', 'success')
+        return redirect(url_for('billing.view_order', order_id=order.id))
+
+    trailers = Trailer.query.order_by(Trailer.id.desc()).all()
+    products = WarehouseProduct.query.order_by(WarehouseProduct.item_name).all()
+    return render_template('billing_order_new.html', trailers=trailers, products=products)
+
+
+@billing_bp.route('/warehouse/orders/<int:order_id>')
+@billing_required
+def view_order(order_id):
+    order = WarehouseOrder.query.get_or_404(order_id)
+    trailer = Trailer.query.get(order.trailer_id) if order.trailer_id else None
+    return render_template('billing_order_view.html', order=order, trailer=trailer)
+
+
+@billing_bp.route('/warehouse/orders/<int:order_id>/status', methods=['POST'])
+@billing_required
+def update_order_status(order_id):
+    order = WarehouseOrder.query.get_or_404(order_id)
+    new_status = request.form.get('status', order.status)
+    if new_status in ('Pending', 'Fulfilled', 'Cancelled'):
+        order.status = new_status
+        db.session.commit()
+        flash(f'Order status updated to {new_status}.', 'success')
+    return redirect(url_for('billing.view_order', order_id=order_id))
+
+
+# ---------- Metrics ----------
+@billing_bp.route('/metrics')
+@billing_required
+def metrics():
+    from sqlalchemy import func
+    total_trailers = Trailer.query.count()
+    completed_trailers = Trailer.query.filter_by(status='Completed').count()
+    pending_trailers = Trailer.query.filter_by(status='Pending').count()
+    in_progress_trailers = Trailer.query.filter_by(status='In Progress').count()
+
+    # Most frequently flagged items (Missing or Red Tag)
+    flagged_counts = (
+        db.session.query(
+            InventoryResponse.item_name,
+            InventoryResponse.item_number,
+            func.count(InventoryResponse.id).label('count')
+        )
+        .filter(InventoryResponse.status.in_(['Missing', 'Red Tag']))
+        .group_by(InventoryResponse.item_name, InventoryResponse.item_number)
+        .order_by(func.count(InventoryResponse.id).desc())
+        .limit(10)
+        .all()
+    )
+
+    # Warehouse low-stock items
+    low_stock = WarehouseProduct.query.filter(
+        WarehouseProduct.quantity_on_hand <= WarehouseProduct.reorder_point
+    ).all()
+
+    # Orders by status
+    order_counts = (
+        db.session.query(WarehouseOrder.status, func.count(WarehouseOrder.id))
+        .group_by(WarehouseOrder.status)
+        .all()
+    )
+    order_status_map = {s: c for s, c in order_counts}
+
+    return render_template(
+        'billing_metrics.html',
+        total_trailers=total_trailers,
+        completed_trailers=completed_trailers,
+        pending_trailers=pending_trailers,
+        in_progress_trailers=in_progress_trailers,
+        flagged_counts=flagged_counts,
+        low_stock=low_stock,
+        order_status_map=order_status_map,
     )

@@ -2,17 +2,26 @@
 {% block title %}Billing Dashboard{% endblock %}
 
 {% block content %}
+<!-- Billing Sub-Nav -->
+<div style="display:flex;gap:4px;margin-bottom:18px;border-bottom:2px solid var(--border);padding-bottom:0;">
+  <a href="{{ url_for('billing.billing_dashboard') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid var(--accent);margin-bottom:-2px;color:var(--text);text-decoration:none;">Invoices</a>
+  <a href="{{ url_for('billing.warehouse_inventory') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Warehouse Stock</a>
+  <a href="{{ url_for('billing.warehouse_orders') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Orders</a>
+  <a href="{{ url_for('billing.pricing') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Pricing</a>
+  <a href="{{ url_for('billing.metrics') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Metrics</a>
+  <div style="flex:1;"></div>
+  <a class="btn ghost small" href="{{ url_for('billing.logout') }}" style="margin-bottom:6px;">Log Out</a>
+</div>
+
 <div class="card">
   <div class="card-header">
-    <h2>Billing Dashboard</h2>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <h2 style="margin:0;font-size:20px;">Billing Dashboard</h2>
+    <div class="actions-row">
       <form method="GET" style="display:flex;gap:6px;">
-        <input class="form-input" type="text" name="q" value="{{ q }}" placeholder="Search job…" style="font-size:13px;padding:7px 10px;width:200px;">
-        <button class="btn btn-ghost btn-sm" type="submit">Search</button>
-        {% if q %}<a class="btn btn-ghost btn-sm" href="{{ url_for('billing.billing_dashboard') }}">Clear</a>{% endif %}
+        <input type="text" name="q" value="{{ q }}" placeholder="Search job…" style="font-size:13px;padding:8px 12px;width:200px;">
+        <button class="btn ghost small" type="submit">Search</button>
+        {% if q %}<a class="btn ghost small" href="{{ url_for('billing.billing_dashboard') }}">Clear</a>{% endif %}
       </form>
-      <a class="btn btn-ghost btn-sm" href="{{ url_for('billing.pricing') }}">Manage Pricing</a>
-      <a class="btn btn-ghost btn-sm" href="{{ url_for('billing.logout') }}">Log Out</a>
     </div>
   </div>
   <div class="card-body" style="padding:0;">
@@ -31,17 +40,17 @@
         <tbody>
           {% for t in trailers %}
           <tr>
-            <td class="text-muted text-sm">#{{ t.id }}</td>
+            <td style="color:var(--muted);font-size:13px;">#{{ t.id }}</td>
             <td style="font-weight:600;">{{ t.job_name or '—' }}</td>
             <td>{{ t.job_number or '—' }}</td>
             <td>{{ t.location or '—' }}</td>
             <td>{{ t.assigned_user or '—' }}</td>
             <td>
-              <a class="btn btn-primary btn-sm" href="{{ url_for('billing.generate_billing_invoice', trailer_id=t.id) }}">Generate Invoice</a>
+              <a class="btn primary small" href="{{ url_for('billing.generate_billing_invoice', trailer_id=t.id) }}">Generate Invoice</a>
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="6" class="text-muted" style="text-align:center;padding:32px;">No completed trailers found.</td></tr>
+          <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);">No completed trailers found.</td></tr>
           {% endfor %}
         </tbody>
       </table>

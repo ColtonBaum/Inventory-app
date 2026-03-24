@@ -95,3 +95,46 @@ class ItemPrice(db.Model):
 
     def __repr__(self):
         return f"<ItemPrice item_number={self.item_number!r} price={self.price}>"
+
+
+class WarehouseProduct(db.Model):
+    __tablename__ = 'warehouse_product'
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    item_name = db.Column(db.String(120))
+    quantity_on_hand = db.Column(db.Integer, default=0)
+    reorder_point = db.Column(db.Integer, default=0)
+    unit_cost = db.Column(db.Float, default=0.0)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False)
+
+    def __repr__(self):
+        return f"<WarehouseProduct item_number={self.item_number!r} qty={self.quantity_on_hand}>"
+
+
+class WarehouseOrder(db.Model):
+    __tablename__ = 'warehouse_order'
+
+    id = db.Column(db.Integer, primary_key=True)
+    trailer_id = db.Column(db.Integer, db.ForeignKey('trailer.id'), nullable=True, index=True)
+    status = db.Column(db.String(50), default='Pending')  # Pending, Fulfilled, Cancelled
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False, index=True)
+
+    lines = db.relationship('WarehouseOrderLine', backref='order', lazy=True, cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f"<WarehouseOrder id={self.id} status={self.status!r}>"
+
+
+class WarehouseOrderLine(db.Model):
+    __tablename__ = 'warehouse_order_line'
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('warehouse_order.id'), nullable=False, index=True)
+    item_number = db.Column(db.String(50))
+    item_name = db.Column(db.String(120))
+    quantity = db.Column(db.Integer, default=0)
+
+    def __repr__(self):
+        return f"<WarehouseOrderLine order_id={self.order_id} item={self.item_number!r} qty={self.quantity}>"

@@ -7,7 +7,7 @@ db = SQLAlchemy()
 def init_db(app):
     db.init_app(app)
     with app.app_context():
-        from models import Trailer, InventoryResponse, Invoice, ItemPrice
+        from models import Trailer, InventoryResponse, Invoice, ItemPrice, WarehouseProduct, WarehouseOrder, WarehouseOrderLine
         db.create_all()
 
         # Add new columns to existing tables if they don't exist yet
