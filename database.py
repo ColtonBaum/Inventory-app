@@ -7,8 +7,29 @@ db = SQLAlchemy()
 def init_db(app):
     db.init_app(app)
     with app.app_context():
-        from models import Trailer, InventoryResponse, Invoice, ItemPrice, WarehouseProduct, WarehouseOrder, WarehouseOrderLine
+        from models import Trailer, InventoryResponse, Invoice, ItemPrice, WarehouseProduct, WarehouseOrder, WarehouseOrderLine, ToolingListItem
         db.create_all()
+
+        # Seed tooling list items from hardcoded lists if DB is empty
+        if ToolingListItem.query.count() == 0:
+            from utils.tooling_lists import tooling_lists as _hardcoded_lists
+            for list_name, items in _hardcoded_lists.items():
+                # Only seed canonical names (skip aliases that share the same list object)
+                seen_ids = set()
+                list_id = id(items)
+                if list_id in seen_ids:
+                    continue
+                seen_ids.add(list_id)
+                for i, item in enumerate(items):
+                    db.session.add(ToolingListItem(
+                        list_name=list_name,
+                        item_number=item.get('Item Number', ''),
+                        item_name=item.get('Item Name', ''),
+                        category=item.get('Category', 'General'),
+                        quantity=int(item.get('Quantity', 0)),
+                        sort_order=i,
+                    ))
+            db.session.commit()
 
         # Add new columns to existing tables if they don't exist yet
         migrations = [

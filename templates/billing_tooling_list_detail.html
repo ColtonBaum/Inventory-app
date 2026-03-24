@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Edit List — {{ list_name }}{% endblock %}
+{% block content %}
+<!-- Billing Sub-Nav -->
+<div style="display:flex;gap:4px;margin-bottom:18px;border-bottom:2px solid var(--border);padding-bottom:0;">
+  <a href="{{ url_for('billing.billing_dashboard') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Invoices</a>
+  <a href="{{ url_for('billing.warehouse_inventory') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Warehouse Stock</a>
+  <a href="{{ url_for('billing.warehouse_orders') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Orders</a>
+  <a href="{{ url_for('billing.pricing') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Pricing</a>
+  <a href="{{ url_for('billing.metrics') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Metrics</a>
+  <a href="{{ url_for('billing.tooling_lists_index') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid var(--accent);margin-bottom:-2px;color:var(--text);text-decoration:none;">Tooling Lists</a>
+  <div style="flex:1;"></div>
+  <a class="btn ghost small" href="{{ url_for('billing.logout') }}" style="margin-bottom:6px;">Log Out</a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <div>
+      <a href="{{ url_for('billing.tooling_lists_index') }}" style="font-size:13px;color:var(--muted);">← All Lists</a>
+      <h2 style="margin:4px 0 0;font-size:20px;">{{ list_name }}</h2>
+    </div>
+    <div style="font-size:14px;color:var(--muted);">{{ items|length }} item{{ 's' if items|length != 1 }}</div>
+  </div>
+
+  <!-- Add item form -->
+  <div style="padding:16px 20px;border-bottom:1px solid var(--border);background:#f8fafc;">
+    <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;">Add Item</div>
+    <form method="POST" action="{{ url_for('billing.tooling_list_add_item', list_name=list_name) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="field" style="min-width:130px;">
+        <label>Item Number</label>
+        <input type="text" name="item_number" placeholder="e.g. HT-001" required>
+      </div>
+      <div class="field" style="flex:1;min-width:200px;">
+        <label>Item Name</label>
+        <input type="text" name="item_name" placeholder="Description" required>
+      </div>
+      <div class="field" style="min-width:130px;">
+        <label>Category</label>
+        <input type="text" name="category" placeholder="e.g. Safety" value="General">
+      </div>
+      <div class="field" style="min-width:80px;">
+        <label>Qty</label>
+        <input type="number" name="quantity" value="1" min="0">
+      </div>
+      <button class="btn success small" type="submit" style="align-self:flex-end;">Add</button>
+    </form>
+  </div>
+
+  <div class="card-body" style="padding:0;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Item #</th>
+            <th>Item Name</th>
+            <th>Category</th>
+            <th style="text-align:center;">Qty</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <!-- View row -->
+          <tr id="row-{{ item.id }}">
+            <td style="color:var(--muted);font-size:13px;">{{ item.item_number }}</td>
+            <td style="font-weight:600;">{{ item.item_name }}</td>
+            <td>{{ item.category }}</td>
+            <td style="text-align:center;font-weight:600;">{{ item.quantity }}</td>
+            <td style="display:flex;gap:6px;">
+              <button class="btn ghost small" onclick="showEdit({{ item.id }})">Edit</button>
+              <form method="POST" action="{{ url_for('billing.tooling_list_delete_item', item_id=item.id) }}" onsubmit="return confirm('Remove this item?');" style="display:inline;">
+                <button class="btn danger small" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+          <!-- Edit row (hidden by default) -->
+          <tr id="edit-{{ item.id }}" style="display:none;background:#fffbeb;">
+            <form method="POST" action="{{ url_for('billing.tooling_list_edit_item', item_id=item.id) }}" style="display:contents;">
+              <td><input type="text" name="item_number" value="{{ item.item_number }}" style="width:100%;font-size:13px;padding:6px 8px;"></td>
+              <td><input type="text" name="item_name" value="{{ item.item_name }}" style="width:100%;font-size:13px;padding:6px 8px;"></td>
+              <td><input type="text" name="category" value="{{ item.category }}" style="width:100%;font-size:13px;padding:6px 8px;"></td>
+              <td><input type="number" name="quantity" value="{{ item.quantity }}" style="width:70px;font-size:13px;padding:6px 8px;"></td>
+              <td style="display:flex;gap:6px;">
+                <button class="btn success small" type="submit">Save</button>
+                <button class="btn ghost small" type="button" onclick="hideEdit({{ item.id }})">Cancel</button>
+              </td>
+            </form>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--muted);">No items in this list yet. Add one above.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% block scripts %}
+{{ super() }}
+<script>
+function showEdit(id) {
+  document.getElementById('row-' + id).style.display = 'none';
+  document.getElementById('edit-' + id).style.display = '';
+}
+function hideEdit(id) {
+  document.getElementById('row-' + id).style.display = '';
+  document.getElementById('edit-' + id).style.display = 'none';
+}
+</script>
+{% endblock %}
+{% endblock %}

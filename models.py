@@ -138,3 +138,17 @@ class WarehouseOrderLine(db.Model):
 
     def __repr__(self):
         return f"<WarehouseOrderLine order_id={self.order_id} item={self.item_number!r} qty={self.quantity}>"
+
+
+class ToolingListItem(db.Model):
+    __tablename__ = 'tooling_list_item'
+    id = db.Column(db.Integer, primary_key=True)
+    list_name = db.Column(db.String(100), nullable=False, index=True)
+    item_number = db.Column(db.String(50))
+    item_name = db.Column(db.String(120))
+    category = db.Column(db.String(50))
+    quantity = db.Column(db.Integer, default=0)
+    sort_order = db.Column(db.Integer, default=0)
+
+    def __repr__(self):
+        return f"<ToolingListItem list={self.list_name!r} item={self.item_number!r}>"

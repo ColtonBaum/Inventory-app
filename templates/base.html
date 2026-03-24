@@ -160,6 +160,7 @@
     <span class="brand">MW Inventory</span>
     <a class="tab {% if request.endpoint == 'inventory.dashboard' %}active{% endif %}" href="{{ url_for('inventory.dashboard') }}">Dashboard</a>
     <a class="tab {% if request.endpoint == 'trailer_assignment.assign_trailer' %}active{% endif %}" href="{{ url_for('trailer_assignment.assign_trailer') }}">Assign Trailer</a>
+    <a class="tab {% if request.endpoint and request.endpoint.startswith('orders.') %}active{% endif %}" href="{{ url_for('orders.orders_list') }}">Orders</a>
     <a class="tab {% if request.endpoint == 'inventory.view_invoices' %}active{% endif %}" href="{{ url_for('inventory.view_invoices') }}">Invoices</a>
     <a class="tab {% if request.endpoint and request.endpoint.startswith('billing.') %}active{% endif %}" href="{{ url_for('billing.billing_dashboard') }}">Billing</a>
   </nav>

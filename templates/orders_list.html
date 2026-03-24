@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Warehouse Orders{% endblock %}
+{% block content %}
+
+<div class="card">
+  <div class="card-header">
+    <h2 style="margin:0;font-size:20px;">Warehouse Orders</h2>
+    <div class="actions-row">
+      <a class="btn success small" href="{{ url_for('orders.new_order') }}">+ New Order</a>
+    </div>
+  </div>
+  <div class="card-body" style="padding:0;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Order #</th>
+            <th>Date</th>
+            <th>Job / Trailer</th>
+            <th>Status</th>
+            <th>Lines</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in orders %}
+          {% set trailer = trailers.get(order.trailer_id) %}
+          <tr>
+            <td style="font-weight:700;">#{{ order.id }}</td>
+            <td style="color:var(--muted);font-size:13px;">{{ order.created_at.strftime('%b %d, %Y') if order.created_at else '—' }}</td>
+            <td>
+              {% if trailer %}
+                <span style="font-weight:600;">{{ trailer.job_name or ('Trailer #' ~ trailer.id) }}</span>
+                {% if trailer.job_number %}<span style="color:var(--muted);font-size:13px;"> ({{ trailer.job_number }})</span>{% endif %}
+              {% else %}
+                <span style="color:var(--muted);">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if order.status == 'Pending' %}
+                <span class="chip amber">Pending</span>
+              {% elif order.status == 'Fulfilled' %}
+                <span class="chip green">Fulfilled</span>
+              {% elif order.status == 'Cancelled' %}
+                <span class="chip red">Cancelled</span>
+              {% else %}
+                <span class="chip">{{ order.status }}</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">{{ order.lines|length }}</td>
+            <td><a class="btn ghost small" href="{{ url_for('orders.view_order', order_id=order.id) }}">View</a></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);">No orders yet. <a href="{{ url_for('orders.new_order') }}">Create one</a>.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

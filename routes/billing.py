@@ -348,6 +348,177 @@ def update_order_status(order_id):
     return redirect(url_for('billing.view_order', order_id=order_id))
 
 
+# ---------- Tooling List Management ----------
+@billing_bp.route('/tooling-lists')
+@billing_required
+def tooling_lists_index():
+    from models import ToolingListItem
+    from sqlalchemy import func
+    # Get all unique list names with item counts
+    counts = (db.session.query(ToolingListItem.list_name, func.count(ToolingListItem.id))
+              .group_by(ToolingListItem.list_name)
+              .order_by(ToolingListItem.list_name)
+              .all())
+    return render_template('billing_tooling_lists.html', list_counts=counts)
+
+
+@billing_bp.route('/tooling-lists/<list_name>')
+@billing_required
+def tooling_list_detail(list_name):
+    from models import ToolingListItem
+    items = (ToolingListItem.query.filter_by(list_name=list_name)
+             .order_by(ToolingListItem.sort_order, ToolingListItem.id).all())
+    return render_template('billing_tooling_list_detail.html', list_name=list_name, items=items)
+
+
+@billing_bp.route('/tooling-lists/<list_name>/add', methods=['POST'])
+@billing_required
+def tooling_list_add_item(list_name):
+    from models import ToolingListItem
+    item_number = (request.form.get('item_number') or '').strip()
+    item_name = (request.form.get('item_name') or '').strip()
+    category = (request.form.get('category') or 'General').strip()
+    try:
+        quantity = int(request.form.get('quantity') or 0)
+    except ValueError:
+        quantity = 0
+    # Put new items at the end
+    max_sort = db.session.query(db.func.max(ToolingListItem.sort_order)).filter_by(list_name=list_name).scalar() or 0
+    db.session.add(ToolingListItem(list_name=list_name, item_number=item_number,
+                                   item_name=item_name, category=category,
+                                   quantity=quantity, sort_order=max_sort+1))
+    db.session.commit()
+    flash(f'Item added to {list_name}.', 'success')
+    return redirect(url_for('billing.tooling_list_detail', list_name=list_name))
+
+
+@billing_bp.route('/tooling-lists/item/<int:item_id>/edit', methods=['POST'])
+@billing_required
+def tooling_list_edit_item(item_id):
+    from models import ToolingListItem
+    item = ToolingListItem.query.get_or_404(item_id)
+    item.item_number = (request.form.get('item_number') or item.item_number).strip()
+    item.item_name = (request.form.get('item_name') or item.item_name).strip()
+    item.category = (request.form.get('category') or item.category).strip()
+    try:
+        item.quantity = int(request.form.get('quantity') or item.quantity)
+    except ValueError:
+        pass
+    db.session.commit()
+    flash('Item updated.', 'success')
+    return redirect(url_for('billing.tooling_list_detail', list_name=item.list_name))
+
+
+@billing_bp.route('/tooling-lists/item/<int:item_id>/delete', methods=['POST'])
+@billing_required
+def tooling_list_delete_item(item_id):
+    from models import ToolingListItem
+    item = ToolingListItem.query.get_or_404(item_id)
+    list_name = item.list_name
+    db.session.delete(item)
+    db.session.commit()
+    flash('Item removed.', 'info')
+    return redirect(url_for('billing.tooling_list_detail', list_name=list_name))
+
+
+@billing_bp.route('/tooling-lists/new-list', methods=['POST'])
+@billing_required
+def tooling_list_create():
+    list_name = (request.form.get('list_name') or '').strip()
+    if not list_name:
+        flash('List name is required.', 'danger')
+        return redirect(url_for('billing.tooling_lists_index'))
+    flash(f'List "{list_name}" created. Add items to it now.', 'success')
+    return redirect(url_for('billing.tooling_list_detail', list_name=list_name))
+
+
+# ---------- Warehouse Excel Import ----------
+@billing_bp.route('/warehouse/import', methods=['GET', 'POST'])
+@billing_required
+def import_warehouse():
+    if request.method == 'POST':
+        f = request.files.get('file')
+        if not f or not f.filename.endswith('.xlsx'):
+            flash('Please upload a .xlsx file.', 'danger')
+            return redirect(url_for('billing.import_warehouse'))
+
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(f, data_only=True)
+            ws = wb.active
+        except Exception as e:
+            flash(f'Could not read Excel file: {e}', 'danger')
+            return redirect(url_for('billing.import_warehouse'))
+
+        # Read header row and find column indices
+        headers = []
+        for cell in ws[1]:
+            headers.append((cell.value or '').strip().lower())
+
+        def find_col(candidates):
+            for c in candidates:
+                if c in headers:
+                    return headers.index(c)
+            return None
+
+        col_num = find_col(['item number', 'item_number', 'item #', 'item no', 'number', 'part number', 'part #'])
+        col_name = find_col(['item name', 'item_name', 'name', 'description', 'desc'])
+        col_qty = find_col(['quantity', 'qty', 'on hand', 'quantity on hand', 'stock', 'qty on hand'])
+        col_price = find_col(['price', 'unit price', 'cost', 'unit cost', 'rate'])
+
+        if col_num is None:
+            flash('Could not find "Item Number" column. Make sure your spreadsheet has a header row with "Item Number".', 'danger')
+            return redirect(url_for('billing.import_warehouse'))
+
+        added = updated = priced = 0
+        for row in ws.iter_rows(min_row=2, values_only=True):
+            item_number = str(row[col_num] or '').strip()
+            if not item_number:
+                continue
+            item_name = str(row[col_name] or '').strip() if col_name is not None else ''
+            try:
+                qty = int(float(row[col_qty] or 0)) if col_qty is not None else None
+            except (ValueError, TypeError):
+                qty = None
+            try:
+                price = float(row[col_price] or 0) if col_price is not None else None
+            except (ValueError, TypeError):
+                price = None
+
+            # Upsert WarehouseProduct
+            if qty is not None:
+                wp = WarehouseProduct.query.filter_by(item_number=item_number).first()
+                if wp:
+                    if item_name:
+                        wp.item_name = item_name
+                    wp.quantity_on_hand = qty
+                    updated += 1
+                else:
+                    db.session.add(WarehouseProduct(
+                        item_number=item_number,
+                        item_name=item_name,
+                        quantity_on_hand=qty,
+                    ))
+                    added += 1
+
+            # Upsert ItemPrice
+            if price is not None:
+                ip = ItemPrice.query.filter_by(item_number=item_number).first()
+                if ip:
+                    ip.price = price
+                    if item_name and not ip.item_name:
+                        ip.item_name = item_name
+                else:
+                    db.session.add(ItemPrice(item_number=item_number, item_name=item_name, price=price))
+                priced += 1
+
+        db.session.commit()
+        flash(f'Import complete: {added} products added, {updated} updated, {priced} prices set.', 'success')
+        return redirect(url_for('billing.warehouse_inventory'))
+
+    return render_template('billing_import.html')
+
+
 # ---------- Metrics ----------
 @billing_bp.route('/metrics')
 @billing_required

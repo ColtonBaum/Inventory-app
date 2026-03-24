@@ -524,6 +524,32 @@ tooling_lists = {
 tooling_lists = {name: _normalize_tooling_list(items, name) for name, items in tooling_lists.items()}
 
 def get_tooling_list(name: str):
+    """Return tooling list items. Tries DB first, falls back to hardcoded."""
     key = (name or "").strip()
+    try:
+        from models import ToolingListItem
+        db_items = (ToolingListItem.query
+                    .filter_by(list_name=key)
+                    .order_by(ToolingListItem.sort_order, ToolingListItem.id)
+                    .all())
+        if db_items:
+            return [{'Item Number': it.item_number, 'Item Name': it.item_name,
+                     'Category': it.category, 'Quantity': it.quantity} for it in db_items]
+    except Exception:
+        pass
     return tooling_lists.get(key, [])
+
+
+def get_all_list_names():
+    """Return sorted list of all tooling list names."""
+    try:
+        from models import ToolingListItem
+        from database import db
+        names = db.session.query(ToolingListItem.list_name).distinct().all()
+        db_names = [n[0] for n in names]
+        if db_names:
+            return sorted(set(db_names))
+    except Exception:
+        pass
+    return sorted(tooling_lists.keys())
 
