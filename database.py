@@ -7,7 +7,7 @@ db = SQLAlchemy()
 def init_db(app):
     db.init_app(app)
     with app.app_context():
-        from models import Trailer, InventoryResponse, Invoice, ItemPrice, WarehouseProduct, WarehouseOrder, WarehouseOrderLine, ToolingListItem
+        from models import Trailer, InventoryResponse, Invoice, ItemPrice, WarehouseProduct, WarehouseOrder, WarehouseOrderLine, ToolingListItem, SpecialtyTool
         db.create_all()
 
         # Seed tooling list items from hardcoded lists if DB is empty

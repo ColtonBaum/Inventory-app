@@ -3,7 +3,7 @@ from flask import (
     Blueprint, render_template, request, redirect, url_for,
     flash, session, current_app, make_response, abort
 )
-from models import ItemPrice, Trailer, InventoryResponse, WarehouseProduct, WarehouseOrder, WarehouseOrderLine
+from models import ItemPrice, Trailer, InventoryResponse, WarehouseProduct, WarehouseOrder, WarehouseOrderLine, SpecialtyTool
 from database import db
 from utils.tooling_lists import get_tooling_list
 from functools import wraps
@@ -57,66 +57,6 @@ def billing_dashboard():
 
 
 # ---------- Pricing Management ----------
-@billing_bp.route('/pricing', methods=['GET', 'POST'])
-@billing_required
-def pricing():
-    if request.method == 'POST':
-        # Bulk update prices
-        for key, val in request.form.items():
-            if key.startswith('price_'):
-                item_number = key[6:]  # strip 'price_'
-                try:
-                    price_val = float(val) if val.strip() else 0.0
-                except ValueError:
-                    price_val = 0.0
-
-                existing = ItemPrice.query.filter_by(item_number=item_number).first()
-                if existing:
-                    existing.price = price_val
-                else:
-                    item_name = request.form.get(f'name_{item_number}', '')
-                    db.session.add(ItemPrice(
-                        item_number=item_number,
-                        item_name=item_name,
-                        price=price_val
-                    ))
-        db.session.commit()
-        flash('Prices updated.', 'success')
-        return redirect(url_for('billing.pricing'))
-
-    # Build a master list of all items across all tooling lists + any already-priced items
-    from utils.tooling_lists import tooling_lists as all_lists
-    all_items = {}  # item_number -> item_name
-    for list_name, items in all_lists.items():
-        for item in items:
-            num = item.get('Item Number', '').strip()
-            name = item.get('Item Name', '').strip()
-            if num and num not in all_items:
-                all_items[num] = name
-
-    # Merge in any existing prices
-    prices = {p.item_number: p for p in ItemPrice.query.all()}
-    for num in prices:
-        if num not in all_items:
-            all_items[num] = prices[num].item_name or ''
-
-    # Search filter
-    q = (request.args.get('q') or '').strip().lower()
-
-    # Build display rows
-    rows = []
-    for num, name in sorted(all_items.items(), key=lambda x: (x[1] or '').lower()):
-        if q and q not in num.lower() and q not in name.lower():
-            continue
-        p = prices.get(num)
-        rows.append({
-            'item_number': num,
-            'item_name': name,
-            'price': p.price if p else 0.0,
-        })
-
-    return render_template('billing_pricing.html', rows=rows, q=q)
-
 
 # ---------- Shared helper: compute invoice line items from live DB ----------
 def _compute_line_items(trailer):
@@ -518,78 +458,6 @@ def import_warehouse():
             )
             return redirect(url_for('billing.import_warehouse'))
 
-        # --- Parse pricing sheet (date-based) ---
-        price_from_sheet = {}  # item_number -> price
-        best_date = None
-        PRICE_SHEET_NAMES = {'price', 'prices', 'pricing', 'price list', 'price book', 'rate sheet'}
-        price_ws = None
-        for sheet_name in wb.sheetnames:
-            if sheet_name.strip().lower() in PRICE_SHEET_NAMES:
-                price_ws = wb[sheet_name]
-                break
-
-        if price_ws is not None:
-            # Scan up to 10 rows for a header row containing item number
-            p_header_row = None
-            p_headers = []
-            for r_idx, row in enumerate(price_ws.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
-                row_vals = [str(c or '').strip().lower() for c in row]
-                if any(v in ITEM_NUM_CANDIDATES for v in row_vals):
-                    p_header_row = r_idx
-                    p_headers = row_vals
-                    # Also keep raw (un-lowercased) headers for date parsing
-                    p_headers_raw = [price_ws.cell(row=r_idx, column=i+1).value for i in range(len(row_vals))]
-                    break
-
-            if p_header_row is not None:
-                # Find item number column
-                p_col_num = next((i for i, v in enumerate(p_headers) if v in ITEM_NUM_CANDIDATES), None)
-
-                # Find date columns: any header that parses as a date
-                from datetime import date as _date
-                today = datetime.now().date()
-
-                def _try_parse_date(val):
-                    if isinstance(val, datetime):
-                        return val.date()
-                    if isinstance(val, _date):
-                        return val
-                    s = str(val or '').strip()
-                    for fmt in ('%m/%d/%Y', '%Y-%m-%d', '%m/%d/%y', '%m-%d-%Y',
-                                '%B %d, %Y', '%b %d, %Y', '%d-%b-%Y', '%d/%m/%Y'):
-                        try:
-                            return datetime.strptime(s, fmt).date()
-                        except ValueError:
-                            continue
-                    return None
-
-                date_cols = []  # list of (col_index, date)
-                for i, raw_val in enumerate(p_headers_raw):
-                    if i == p_col_num:
-                        continue
-                    d = _try_parse_date(raw_val)
-                    if d is not None:
-                        date_cols.append((i, d))
-
-                if date_cols and p_col_num is not None:
-                    # Pick the most recent date that is <= today;
-                    # fall back to earliest future date if all are in the future
-                    past_dates = [(i, d) for i, d in date_cols if d <= today]
-                    if past_dates:
-                        best_col, best_date = max(past_dates, key=lambda x: x[1])
-                    else:
-                        best_col, best_date = min(date_cols, key=lambda x: x[1])
-
-                    for row in price_ws.iter_rows(min_row=p_header_row + 1, values_only=True):
-                        item_num = str(row[p_col_num] or '').strip()
-                        if not item_num:
-                            continue
-                        try:
-                            price_val = float(row[best_col] or 0)
-                            price_from_sheet[item_num] = price_val
-                        except (ValueError, TypeError, IndexError):
-                            continue
-
         # Pre-load all existing records into dicts to avoid per-row DB queries
         existing_products = {p.item_number: p for p in WarehouseProduct.query.all()}
         existing_prices = {p.item_number: p for p in ItemPrice.query.all()}
@@ -611,16 +479,13 @@ def import_warehouse():
                 reorder = int(float(row[col_reorder] or 0)) if col_reorder is not None else None
             except (ValueError, TypeError):
                 reorder = None
-            # Price: prefer price sheet (date-based), fall back to inline column
-            price = price_from_sheet.get(item_number)
-            if price is None and col_price is not None:
-                try:
-                    price = float(row[col_price] or 0)
-                except (ValueError, TypeError):
-                    price = None
+            try:
+                price = float(row[col_price] or 0) if col_price is not None else None
+            except (ValueError, TypeError):
+                price = None
 
             # Upsert WarehouseProduct
-            if qty is not None or reorder is not None:
+            if qty is not None or reorder is not None or price is not None:
                 wp = existing_products.get(item_number)
                 if wp:
                     if item_name:
@@ -629,6 +494,8 @@ def import_warehouse():
                         wp.quantity_on_hand = qty
                     if reorder is not None:
                         wp.reorder_point = reorder
+                    if price is not None:
+                        wp.unit_cost = price
                     updated += 1
                 else:
                     wp = WarehouseProduct(
@@ -636,12 +503,13 @@ def import_warehouse():
                         item_name=item_name,
                         quantity_on_hand=qty or 0,
                         reorder_point=reorder or 0,
+                        unit_cost=price or 0.0,
                     )
                     new_products.append(wp)
                     existing_products[item_number] = wp
                     added += 1
 
-            # Upsert ItemPrice
+            # Sync unit cost -> ItemPrice so billing invoices use the same price
             if price is not None:
                 ip = existing_prices.get(item_number)
                 if ip:
@@ -654,24 +522,13 @@ def import_warehouse():
                     existing_prices[item_number] = ip
                 priced += 1
 
-        # Upsert prices from the pricing sheet for items not on the stock tab
-        for item_num, price_val in price_from_sheet.items():
-            if item_num not in existing_prices:
-                ip = ItemPrice(item_number=item_num, item_name='', price=price_val)
-                new_prices.append(ip)
-                existing_prices[item_num] = ip
-                priced += 1
-
         if new_products:
             db.session.add_all(new_products)
         if new_prices:
             db.session.add_all(new_prices)
         db.session.commit()
-
-        price_sheet_msg = (f', prices from "{price_ws.title}" tab (effective date: {best_date})'
-                           if price_from_sheet and best_date else '')
         flash(
-            f'Import complete: {added} products added, {updated} updated, {priced} prices set{price_sheet_msg}.',
+            f'Import complete: {added} products added, {updated} updated, {priced} prices synced.',
             'success'
         )
         return redirect(url_for('billing.warehouse_inventory'))
@@ -726,3 +583,69 @@ def metrics():
         low_stock=low_stock,
         order_status_map=order_status_map,
     )
+
+
+# ---------- Specialty Tools ----------
+@billing_bp.route('/specialty-tools')
+@billing_required
+def specialty_tools():
+    q = (request.args.get('q') or '').strip().lower()
+    tools = SpecialtyTool.query.order_by(SpecialtyTool.item_name).all()
+    if q:
+        tools = [t for t in tools if q in (t.item_name or '').lower() or q in (t.item_number or '').lower()]
+    return render_template('billing_specialty_tools.html', tools=tools, q=q)
+
+
+@billing_bp.route('/specialty-tools/add', methods=['POST'])
+@billing_required
+def specialty_tool_add():
+    item_number = (request.form.get('item_number') or '').strip()
+    item_name = (request.form.get('item_name') or '').strip()
+    if not item_number or not item_name:
+        flash('Item number and name are required.', 'danger')
+        return redirect(url_for('billing.specialty_tools'))
+    if SpecialtyTool.query.filter_by(item_number=item_number).first():
+        flash('A tool with that item number already exists.', 'warning')
+        return redirect(url_for('billing.specialty_tools'))
+    try:
+        price = float(request.form.get('price') or 0)
+    except ValueError:
+        price = 0.0
+    try:
+        quantity = int(request.form.get('quantity') or 0)
+    except ValueError:
+        quantity = 0
+    db.session.add(SpecialtyTool(item_number=item_number, item_name=item_name,
+                                  price=price, quantity=quantity))
+    db.session.commit()
+    flash('Specialty tool added.', 'success')
+    return redirect(url_for('billing.specialty_tools'))
+
+
+@billing_bp.route('/specialty-tools/<int:tool_id>/edit', methods=['POST'])
+@billing_required
+def specialty_tool_edit(tool_id):
+    tool = SpecialtyTool.query.get_or_404(tool_id)
+    tool.item_number = (request.form.get('item_number') or tool.item_number).strip()
+    tool.item_name = (request.form.get('item_name') or tool.item_name).strip()
+    try:
+        tool.price = float(request.form.get('price') or 0)
+    except ValueError:
+        pass
+    try:
+        tool.quantity = int(request.form.get('quantity') or 0)
+    except ValueError:
+        pass
+    db.session.commit()
+    flash('Tool updated.', 'success')
+    return redirect(url_for('billing.specialty_tools'))
+
+
+@billing_bp.route('/specialty-tools/<int:tool_id>/delete', methods=['POST'])
+@billing_required
+def specialty_tool_delete(tool_id):
+    tool = SpecialtyTool.query.get_or_404(tool_id)
+    db.session.delete(tool)
+    db.session.commit()
+    flash('Tool deleted.', 'info')
+    return redirect(url_for('billing.specialty_tools'))

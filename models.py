@@ -101,6 +101,19 @@ class ItemPrice(db.Model):
         return f"<ItemPrice item_number={self.item_number!r} price={self.price}>"
 
 
+class SpecialtyTool(db.Model):
+    __tablename__ = 'specialty_tool'
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_number = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    item_name = db.Column(db.String(120), nullable=False)
+    price = db.Column(db.Float, default=0.0)
+    quantity = db.Column(db.Integer, default=0)
+
+    def __repr__(self):
+        return f"<SpecialtyTool item_number={self.item_number!r} qty={self.quantity}>"
+
+
 class WarehouseProduct(db.Model):
     __tablename__ = 'warehouse_product'
 
