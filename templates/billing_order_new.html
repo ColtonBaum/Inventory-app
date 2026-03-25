@@ -11,10 +11,27 @@
   <a href="{{ url_for('billing.metrics') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Metrics</a>
   <a href="{{ url_for('billing.tooling_lists_index') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Tooling Lists</a>
   <div style="flex:1;"></div>
-
 </div>
 
-<div class="card" style="max-width:720px;margin:0 auto;">
+<style>
+.order-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.order-type-cards { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.order-type-card { border:2px solid var(--border); border-radius:10px; padding:14px 16px; cursor:pointer; transition:border-color .15s, background .15s; }
+.order-type-card.selected { border-color:var(--accent); background:var(--accent-faint,#eff6ff); }
+.item-row { display:grid; grid-template-columns:1fr 80px 40px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); }
+.item-row:first-child { border-top:1px solid var(--border); }
+.form-input { width:100%; box-sizing:border-box; min-height:42px; font-size:15px; }
+.submit-row { display:flex; gap:10px; justify-content:flex-end; padding-top:8px; }
+@media (max-width:600px) {
+  .order-grid-2 { grid-template-columns:1fr; }
+  .order-type-cards { grid-template-columns:1fr; }
+  .item-row { grid-template-columns:1fr 70px 36px; }
+  .submit-row { flex-direction:column-reverse; }
+  .submit-row a, .submit-row button { width:100%; text-align:center; }
+}
+</style>
+
+<div class="card" style="max-width:680px;margin:0 auto;">
   <div class="card-header">
     <h2 style="margin:0;font-size:20px;">New Warehouse Order</h2>
     <a class="btn ghost small" href="{{ url_for('billing.warehouse_orders') }}">Back</a>
@@ -31,75 +48,71 @@
       {% endfor %}
     {% endwith %}
 
-    <form method="POST" id="order-form" style="display:grid;gap:16px;">
+    <form method="POST" id="order-form" style="display:grid;gap:18px;">
 
       <!-- Order type -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-        <div onclick="document.getElementById('type_sale').checked=true;setType('SALE')"
-             id="card_sale"
-             style="border:2px solid var(--accent);border-radius:10px;padding:14px 16px;cursor:pointer;background:var(--accent-faint,#eff6ff);">
+      <div class="order-type-cards">
+        <div class="order-type-card selected" id="card_sale" onclick="setType('SALE')">
           <div style="font-size:15px;font-weight:700;">Sale / Issue</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Items going OUT — distributing to a job or customer</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Items going OUT</div>
           <input type="radio" name="order_type" id="type_sale" value="SALE" checked style="display:none;">
         </div>
-        <div onclick="document.getElementById('type_purchase').checked=true;setType('PURCHASE')"
-             id="card_purchase"
-             style="border:2px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;">
+        <div class="order-type-card" id="card_purchase" onclick="setType('PURCHASE')">
           <div style="font-size:15px;font-weight:700;">Purchase / Receive</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Items coming IN — receiving stock from a supplier</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Items coming IN</div>
           <input type="radio" name="order_type" id="type_purchase" value="PURCHASE" style="display:none;">
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <!-- Name + Trailer -->
+      <div class="order-grid-2">
         <div class="field">
-          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Requested By</label>
-          <input type="text" name="requester_name" placeholder="e.g. John Smith" style="width:100%;box-sizing:border-box;">
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px;">Your Name</label>
+          <input class="form-input" type="text" name="requester_name" placeholder="e.g. John Smith">
         </div>
         <div class="field">
-          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Linked Trailer (optional)</label>
-          <select name="trailer_id" style="width:100%;box-sizing:border-box;">
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px;">Linked Trailer (optional)</label>
+          <select class="form-input" name="trailer_id">
             <option value="">— No trailer —</option>
             {% for t in trailers %}
-            <option value="{{ t.id }}">{{ t.job_name or ('Trailer #' ~ t.id) }} {% if t.job_number %}({{ t.job_number }}){% endif %}</option>
+            <option value="{{ t.id }}">{{ t.job_name or ('Trailer #' ~ t.id) }}{% if t.job_number %} ({{ t.job_number }}){% endif %}</option>
             {% endfor %}
           </select>
         </div>
       </div>
 
+      <!-- Notes -->
       <div class="field">
-        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Notes (optional)</label>
-        <textarea name="notes" rows="2" placeholder="Any special instructions…" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px;">Notes (optional)</label>
+        <textarea name="notes" rows="2" placeholder="Any special instructions…" style="width:100%;box-sizing:border-box;resize:vertical;font-size:15px;min-height:60px;"></textarea>
       </div>
 
+      <!-- Items -->
       <div>
-        <label style="font-size:13px;font-weight:700;display:block;margin-bottom:10px;">Items</label>
-        <table style="width:100%;border-collapse:collapse;" id="lineTable">
-          <thead>
-            <tr>
-              <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);">Description</th>
-              <th style="text-align:center;padding:6px 8px;font-size:12px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);width:110px;">Qty</th>
-              <th style="width:40px;border-bottom:1px solid var(--border);"></th>
-            </tr>
-          </thead>
-          <tbody id="lineBody">
-            <tr class="line-row">
-              <td style="padding:4px 4px 4px 0;">
-                <input type="text" name="item_name" placeholder="Item description…" style="width:100%;box-sizing:border-box;" required>
-              </td>
-              <td style="padding:4px;">
-                <input type="number" name="quantity" min="1" value="1" style="width:100%;box-sizing:border-box;text-align:center;">
-              </td>
-              <td style="padding:4px;text-align:center;">
-                <button type="button" onclick="removeLine(this)" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;">×</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <button type="button" onclick="addLine()" class="btn ghost small" style="margin-top:8px;">+ Add Item</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <label style="font-size:13px;font-weight:700;">Items</label>
+          <span style="font-size:12px;color:var(--muted);">Description / Qty</span>
+        </div>
+
+        <!-- Column headers -->
+        <div style="display:grid;grid-template-columns:1fr 80px 40px;gap:8px;padding:0 0 4px 0;">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;">Description</div>
+          <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px;text-align:center;">Qty</div>
+          <div></div>
+        </div>
+
+        <div id="lineBody">
+          <div class="item-row">
+            <input class="form-input" type="text" name="item_name" placeholder="Item description…" required>
+            <input class="form-input" type="number" name="quantity" min="1" value="1" style="text-align:center;">
+            <button type="button" onclick="removeLine(this)" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:0;width:36px;height:36px;">×</button>
+          </div>
+        </div>
+
+        <button type="button" onclick="addLine()" class="btn ghost small" style="margin-top:10px;width:100%;justify-content:center;">+ Add Item</button>
       </div>
 
-      <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:4px;">
+      <div class="submit-row">
         <a class="btn ghost" href="{{ url_for('billing.warehouse_orders') }}">Cancel</a>
         <button class="btn primary" type="submit">Create Order</button>
       </div>
@@ -111,37 +124,23 @@
 {{ super() }}
 <script>
 function setType(t) {
-  const sale = document.getElementById('card_sale');
-  const pur  = document.getElementById('card_purchase');
-  const accent = 'var(--accent)';
-  const border = 'var(--border)';
-  if (t === 'SALE') {
-    sale.style.borderColor = accent; sale.style.background = 'var(--accent-faint,#eff6ff)';
-    pur.style.borderColor  = border; pur.style.background  = '';
-  } else {
-    pur.style.borderColor  = accent; pur.style.background  = 'var(--accent-faint,#eff6ff)';
-    sale.style.borderColor = border; sale.style.background = '';
-  }
+  document.getElementById('type_' + t.toLowerCase()).checked = true;
+  document.getElementById('card_sale').classList.toggle('selected', t === 'SALE');
+  document.getElementById('card_purchase').classList.toggle('selected', t === 'PURCHASE');
 }
 function addLine() {
-  const row = document.createElement('tr');
-  row.className = 'line-row';
+  const row = document.createElement('div');
+  row.className = 'item-row';
   row.innerHTML = `
-    <td style="padding:4px 4px 4px 0;">
-      <input type="text" name="item_name" placeholder="Item description…" style="width:100%;box-sizing:border-box;">
-    </td>
-    <td style="padding:4px;">
-      <input type="number" name="quantity" min="1" value="1" style="width:100%;box-sizing:border-box;text-align:center;">
-    </td>
-    <td style="padding:4px;text-align:center;">
-      <button type="button" onclick="removeLine(this)" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;">×</button>
-    </td>`;
+    <input class="form-input" type="text" name="item_name" placeholder="Item description…">
+    <input class="form-input" type="number" name="quantity" min="1" value="1" style="text-align:center;">
+    <button type="button" onclick="removeLine(this)" style="background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;padding:0;width:36px;height:36px;">×</button>`;
   document.getElementById('lineBody').appendChild(row);
   row.querySelector('input[name="item_name"]').focus();
 }
 function removeLine(btn) {
-  const rows = document.querySelectorAll('.line-row');
-  if (rows.length > 1) btn.closest('tr').remove();
+  const rows = document.querySelectorAll('.item-row');
+  if (rows.length > 1) btn.closest('.item-row').remove();
 }
 </script>
 {% endblock %}
