@@ -507,7 +507,14 @@ def import_warehouse():
             )
             return redirect(url_for('billing.import_warehouse'))
 
+        # Pre-load all existing records into dicts to avoid per-row DB queries
+        existing_products = {p.item_number: p for p in WarehouseProduct.query.all()}
+        existing_prices = {p.item_number: p for p in ItemPrice.query.all()}
+
         added = updated = priced = 0
+        new_products = []
+        new_prices = []
+
         for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
             item_number = str(row[col_num] or '').strip()
             if not item_number:
@@ -522,33 +529,41 @@ def import_warehouse():
             except (ValueError, TypeError):
                 price = None
 
-            # Upsert WarehouseProduct
+            # Upsert WarehouseProduct (no per-row query)
             if qty is not None:
-                wp = WarehouseProduct.query.filter_by(item_number=item_number).first()
+                wp = existing_products.get(item_number)
                 if wp:
                     if item_name:
                         wp.item_name = item_name
                     wp.quantity_on_hand = qty
                     updated += 1
                 else:
-                    db.session.add(WarehouseProduct(
+                    wp = WarehouseProduct(
                         item_number=item_number,
                         item_name=item_name,
                         quantity_on_hand=qty,
-                    ))
+                    )
+                    new_products.append(wp)
+                    existing_products[item_number] = wp  # prevent duplicate adds
                     added += 1
 
-            # Upsert ItemPrice
+            # Upsert ItemPrice (no per-row query)
             if price is not None:
-                ip = ItemPrice.query.filter_by(item_number=item_number).first()
+                ip = existing_prices.get(item_number)
                 if ip:
                     ip.price = price
                     if item_name and not ip.item_name:
                         ip.item_name = item_name
                 else:
-                    db.session.add(ItemPrice(item_number=item_number, item_name=item_name, price=price))
+                    ip = ItemPrice(item_number=item_number, item_name=item_name, price=price)
+                    new_prices.append(ip)
+                    existing_prices[item_number] = ip  # prevent duplicate adds
                 priced += 1
 
+        if new_products:
+            db.session.add_all(new_products)
+        if new_prices:
+            db.session.add_all(new_prices)
         db.session.commit()
         flash(f'Import complete: {added} products added, {updated} updated, {priced} prices set.', 'success')
         return redirect(url_for('billing.warehouse_inventory'))
