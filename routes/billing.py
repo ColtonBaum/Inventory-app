@@ -402,7 +402,7 @@ def import_warehouse():
         ITEM_NUM_CANDIDATES = {
             'item number', 'item_number', 'item #', 'item no', 'part number', 'part #',
             'part no', 'sku', 'product number', 'product #', 'number', 'no', 'id',
-            'item id', 'product id', 'code', 'item code', 'part code',
+            'item id', 'product id', 'product_id', 'code', 'item code', 'part code',
         }
         header_row_idx = None
         headers = []
@@ -420,25 +420,27 @@ def import_warehouse():
             return None
 
         col_num = find_col([
-            'item number', 'item_number', 'item #', 'item no', 'part number', 'part #',
-            'part no', 'sku', 'product number', 'product #', 'number', 'no', 'id',
-            'item id', 'product id', 'code', 'item code', 'part code',
+            'item_number', 'item number', 'item #', 'item no', 'part number', 'part #',
+            'part no', 'product_id', 'product id', 'sku', 'product number', 'product #',
+            'number', 'no', 'id', 'item id', 'code', 'item code', 'part code',
         ])
         col_name = find_col([
-            'item name', 'item_name', 'product name', 'name', 'description', 'desc',
+            'name', 'item name', 'item_name', 'product name', 'description', 'desc',
             'item description', 'product description', 'title',
         ])
         col_qty = find_col([
-            'quantity', 'qty', 'on hand', 'quantity on hand', 'qty on hand',
-            'stock', 'stock on hand', 'inventory', 'count', 'available', 'balance',
+            'inventory_on_hand', 'inventory on hand', 'quantity', 'qty', 'on hand',
+            'quantity on hand', 'qty on hand', 'stock', 'stock on hand',
+            'inventory', 'count', 'available', 'balance',
         ])
         col_reorder = find_col([
-            'reorder point', 'reorder', 'reorder qty', 'min stock', 'minimum',
-            'min qty', 'min', 'reorder level', 'minimum stock', 'min quantity',
+            'reorder_point', 'reorder point', 'reorder', 'reorder qty', 'min stock',
+            'minimum', 'min qty', 'min', 'reorder level', 'minimum stock', 'min quantity',
         ])
         col_price = find_col([
-            'price', 'unit price', 'cost', 'unit cost', 'rate', 'each',
-            'unit cost ($)', 'price ($)', 'cost ($)', 'sell price', 'list price',
+            'unit cost', 'unit_cost', 'price', 'unit price', 'cost', 'rate', 'each',
+            'purchase_price', 'purchase price', 'unit cost ($)', 'price ($)',
+            'cost ($)', 'sell price', 'list price', 'sales_price', 'sale price',
         ])
 
         if col_num is None or header_row_idx is None:
@@ -453,12 +455,139 @@ def import_warehouse():
             flash(
                 f'Could not find an "Item Number" column in the first 10 rows. '
                 f'Values found: {", ".join(sample[:20]) or "(empty sheet)"}. '
-                f'Rename your item number column to "Item Number" or "Item #".',
+                f'Rename your item number column to "Item Number", "ITEM_NUMBER", or "PRODUCT_ID".',
                 'danger'
             )
             return redirect(url_for('billing.import_warehouse'))
 
-        # Pre-load all existing records into dicts to avoid per-row DB queries
+        # --- Read PRICES sheet (PRODUCT_ID, EFFECTIVE_FROM_DATE, PURCHASE_PRICE, SALES_PRICE) ---
+        # Pick the most recent price record with EFFECTIVE_FROM_DATE <= today per product
+        from datetime import date as _date
+        today = datetime.now().date()
+
+        def _try_parse_date(val):
+            if isinstance(val, datetime):
+                return val.date()
+            if isinstance(val, _date):
+                return val
+            s = str(val or '').strip()
+            for fmt in ('%Y-%m-%d', '%m/%d/%Y', '%m/%d/%y', '%m-%d-%Y',
+                        '%B %d, %Y', '%b %d, %Y', '%d-%b-%Y', '%d/%m/%Y'):
+                try:
+                    return datetime.strptime(s, fmt).date()
+                except ValueError:
+                    continue
+            return None
+
+        PRICE_SHEET_NAMES = {'prices', 'price', 'pricing', 'price list', 'price book',
+                              'rate sheet', 'pricelist'}
+        price_from_sheet = {}  # item_number (upper) -> best price float
+        for sheet_name in wb.sheetnames:
+            if sheet_name.strip().lower() in PRICE_SHEET_NAMES:
+                pws = wb[sheet_name]
+                # Find header row
+                p_hdr_idx = None
+                p_hdrs = []
+                for r_idx, row in enumerate(pws.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
+                    row_vals = [str(c or '').strip().lower() for c in row]
+                    if any(v in ITEM_NUM_CANDIDATES for v in row_vals):
+                        p_hdr_idx = r_idx
+                        p_hdrs = row_vals
+                        break
+                if p_hdr_idx is None:
+                    break
+
+                def pfind(cands):
+                    for c in cands:
+                        if c in p_hdrs:
+                            return p_hdrs.index(c)
+                    return None
+
+                p_col_id = pfind(['product_id', 'product id', 'item_number', 'item number',
+                                   'item #', 'item no', 'sku', 'id', 'code'])
+                p_col_date = pfind(['effective_from_date', 'effective from date', 'effective date',
+                                     'date', 'price date', 'from date', 'start date'])
+                p_col_purchase = pfind(['purchase_price', 'purchase price', 'cost', 'unit cost',
+                                         'buy price', 'cost price'])
+                p_col_sales = pfind(['sales_price', 'sale price', 'sales price', 'sell price',
+                                      'price', 'unit price', 'list price'])
+
+                if p_col_id is None:
+                    break
+
+                # Collect all rows: {item_upper -> [(date, purchase_price, sales_price)]}
+                from collections import defaultdict as _dd
+                price_records = _dd(list)
+                for row in pws.iter_rows(min_row=p_hdr_idx + 1, values_only=True):
+                    item_id = str(row[p_col_id] or '').strip().upper()
+                    if not item_id:
+                        continue
+                    d = _try_parse_date(row[p_col_date]) if p_col_date is not None else None
+                    try:
+                        purchase = float(row[p_col_purchase] or 0) if p_col_purchase is not None else None
+                    except (ValueError, TypeError):
+                        purchase = None
+                    try:
+                        sales = float(row[p_col_sales] or 0) if p_col_sales is not None else None
+                    except (ValueError, TypeError):
+                        sales = None
+                    price_records[item_id].append((d, purchase, sales))
+
+                # For each product, pick the record with the most recent date <= today
+                for item_id, records in price_records.items():
+                    past = [(d, pu, sa) for d, pu, sa in records if d is not None and d <= today]
+                    if past:
+                        best = max(past, key=lambda x: x[0])
+                    elif records:
+                        best = min(
+                            [(d, pu, sa) for d, pu, sa in records if d is not None],
+                            key=lambda x: x[0],
+                            default=records[0]
+                        )
+                    else:
+                        continue
+                    _, purchase_price, sales_price = best
+                    # Use sales_price for billing invoices; fall back to purchase_price
+                    price_from_sheet[item_id] = sales_price if sales_price else purchase_price
+                break  # only process first matching sheet
+
+        # --- Deduplicate existing DB records by case-normalizing item_number ---
+        # Merge any records that differ only in case
+        all_products = WarehouseProduct.query.order_by(WarehouseProduct.id).all()
+        seen_upper = {}  # upper -> canonical product
+        for wp in all_products:
+            key = wp.item_number.upper()
+            if key in seen_upper:
+                # Merge into the canonical record then delete this duplicate
+                canon = seen_upper[key]
+                if not canon.item_name and wp.item_name:
+                    canon.item_name = wp.item_name
+                if wp.quantity_on_hand and not canon.quantity_on_hand:
+                    canon.quantity_on_hand = wp.quantity_on_hand
+                if wp.reorder_point and not canon.reorder_point:
+                    canon.reorder_point = wp.reorder_point
+                if wp.unit_cost and not canon.unit_cost:
+                    canon.unit_cost = wp.unit_cost
+                # Normalize canonical item_number to uppercase
+                canon.item_number = key
+                db.session.delete(wp)
+            else:
+                wp.item_number = key  # normalize to uppercase
+                seen_upper[key] = wp
+
+        all_prices = ItemPrice.query.order_by(ItemPrice.id).all()
+        seen_price_upper = {}
+        for ip in all_prices:
+            key = ip.item_number.upper()
+            if key in seen_price_upper:
+                db.session.delete(ip)
+            else:
+                ip.item_number = key
+                seen_price_upper[key] = ip
+
+        db.session.flush()
+
+        # Pre-load normalized dicts after dedup
         existing_products = {p.item_number: p for p in WarehouseProduct.query.all()}
         existing_prices = {p.item_number: p for p in ItemPrice.query.all()}
 
@@ -467,7 +596,7 @@ def import_warehouse():
         new_prices = []
 
         for row in ws.iter_rows(min_row=header_row_idx + 1, values_only=True):
-            item_number = str(row[col_num] or '').strip()
+            item_number = str(row[col_num] or '').strip().upper()  # normalize to uppercase
             if not item_number:
                 continue
             item_name = str(row[col_name] or '').strip() if col_name is not None else ''
@@ -479,13 +608,16 @@ def import_warehouse():
                 reorder = int(float(row[col_reorder] or 0)) if col_reorder is not None else None
             except (ValueError, TypeError):
                 reorder = None
-            try:
-                price = float(row[col_price] or 0) if col_price is not None else None
-            except (ValueError, TypeError):
-                price = None
+            # Price: from PRICES sheet first, then inline column
+            price = price_from_sheet.get(item_number)
+            if price is None and col_price is not None:
+                try:
+                    price = float(row[col_price] or 0) or None
+                except (ValueError, TypeError):
+                    price = None
 
             # Upsert WarehouseProduct
-            if qty is not None or reorder is not None or price is not None:
+            if qty is not None or reorder is not None or item_name:
                 wp = existing_products.get(item_number)
                 if wp:
                     if item_name:
@@ -509,7 +641,7 @@ def import_warehouse():
                     existing_products[item_number] = wp
                     added += 1
 
-            # Sync unit cost -> ItemPrice so billing invoices use the same price
+            # Sync price -> ItemPrice so billing invoices use the same price
             if price is not None:
                 ip = existing_prices.get(item_number)
                 if ip:
@@ -527,8 +659,9 @@ def import_warehouse():
         if new_prices:
             db.session.add_all(new_prices)
         db.session.commit()
+        price_note = f', {len(price_from_sheet)} prices from PRICES sheet' if price_from_sheet else ''
         flash(
-            f'Import complete: {added} products added, {updated} updated, {priced} prices synced.',
+            f'Import complete: {added} products added, {updated} updated, {priced} prices synced{price_note}.',
             'success'
         )
         return redirect(url_for('billing.warehouse_inventory'))
