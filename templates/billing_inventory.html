@@ -54,7 +54,7 @@
         <input type="number" name="reorder_point" value="0" min="0">
       </div>
       <div class="field" style="min-width:100px;">
-        <label>Unit Cost ($)</label>
+        <label>Purchase Price ($)</label>
         <input type="number" name="unit_cost" value="0" min="0" step="0.01">
       </div>
       <button class="btn success small" type="submit" style="align-self:flex-end;">Add Product</button>
@@ -70,7 +70,8 @@
             <th>Item Name</th>
             <th style="text-align:center;">Qty on Hand</th>
             <th style="text-align:center;">Reorder Point</th>
-            <th style="text-align:right;">Unit Cost</th>
+            <th style="text-align:right;">Purchase Price</th>
+            <th style="text-align:right;">Sales Price</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
@@ -83,6 +84,7 @@
             <td style="text-align:center;font-weight:700;font-size:16px;">{{ p.quantity_on_hand }}</td>
             <td style="text-align:center;color:var(--muted);">{{ p.reorder_point }}</td>
             <td style="text-align:right;">${{ '%.2f' | format(p.unit_cost) }}</td>
+            <td style="text-align:right;color:#166534;font-weight:600;">${{ '%.2f' | format(p.unit_cost * 1.10) }}</td>
             <td>
               {% if p.quantity_on_hand <= p.reorder_point %}
                 <span class="chip amber">Low Stock</span>
@@ -95,7 +97,7 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted);">No products in warehouse. Add one above.</td></tr>
+          <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted);">No products in warehouse. Add one above.</td></tr>
           {% endfor %}
         </tbody>
       </table>

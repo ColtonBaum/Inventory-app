@@ -86,7 +86,8 @@ def _compute_line_items(trailer):
             if r.note:
                 response_map[key]['note'] = r.note
 
-    price_map = {p.item_number: p.price for p in ItemPrice.query.all()}
+    # Sales price = purchase cost + 10% markup
+    price_map = {p.item_number: round(p.unit_cost * 1.10, 2) for p in WarehouseProduct.query.all()}
 
     line_items = []
     total = 0.0
