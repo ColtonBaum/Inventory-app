@@ -14,32 +14,22 @@ import io
 billing_bp = Blueprint('billing', __name__, url_prefix='/billing')
 
 
-# ---------- Auth ----------
+# ---------- Auth (disabled) ----------
 def billing_required(f):
+    """No-op decorator — billing is open to all authenticated app users."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not session.get('billing_auth'):
-            return redirect(url_for('billing.login', next=request.url))
         return f(*args, **kwargs)
     return decorated
 
 
 @billing_bp.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        pw = request.form.get('password', '')
-        if pw == current_app.config.get('BILLING_PASSWORD', ''):
-            session['billing_auth'] = True
-            next_url = request.args.get('next') or url_for('billing.billing_dashboard')
-            return redirect(next_url)
-        flash('Incorrect password.', 'danger')
-    return render_template('billing_login.html')
+    return redirect(url_for('billing.billing_dashboard'))
 
 
 @billing_bp.route('/logout')
 def logout():
-    session.pop('billing_auth', None)
-    flash('Logged out of billing.', 'info')
     return redirect(url_for('inventory.dashboard'))
 
 
