@@ -36,6 +36,7 @@ def init_db(app):
             "ALTER TABLE trailer ADD COLUMN IF NOT EXISTS ln_25s VARCHAR(120)",
             "ALTER TABLE trailer ADD COLUMN IF NOT EXISTS notes TEXT",
             "ALTER TABLE invoice ADD COLUMN IF NOT EXISTS billed BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE invoice ADD COLUMN IF NOT EXISTS line_items_json TEXT",
         ]
         with db.engine.connect() as conn:
             for sql in migrations:

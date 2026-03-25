@@ -118,20 +118,14 @@ def pricing():
     return render_template('billing_pricing.html', rows=rows, q=q)
 
 
-# ---------- Generate Billing Invoice for a Trailer ----------
-@billing_bp.route('/invoice/<int:trailer_id>')
-@billing_required
-def generate_billing_invoice(trailer_id):
-    trailer = Trailer.query.get_or_404(trailer_id)
-
-    # Get all responses for this trailer
-    responses = InventoryResponse.query.filter_by(trailer_id=trailer_id).all()
-
-    # Get the tooling list to know expected quantities
+# ---------- Shared helper: compute invoice line items from live DB ----------
+def _compute_line_items(trailer):
+    """Return (line_items, total) using current ItemPrice values."""
+    import json as _json
+    responses = InventoryResponse.query.filter_by(trailer_id=trailer.id).all()
     list_name = (trailer.tooling_list_name or trailer.inventory_type or '').strip()
     tooling_list = get_tooling_list(list_name) or []
 
-    # Build expected qty map
     expected_map = {}
     for item in tooling_list:
         num = item.get('Item Number', '').strip()
@@ -140,8 +134,7 @@ def generate_billing_invoice(trailer_id):
             'quantity': int(item.get('Quantity', 0)) if str(item.get('Quantity', 0)).isdigit() else 0,
         }
 
-    # Build response status map
-    response_map = defaultdict(lambda: {'missing': 0, 'redtag': 0, 'complete': False, 'note': ''})
+    response_map = defaultdict(lambda: {'missing': 0, 'redtag': 0, 'note': ''})
     for r in responses:
         key = r.item_number
         if r.status == 'Missing':
@@ -152,15 +145,12 @@ def generate_billing_invoice(trailer_id):
             response_map[key]['redtag'] += (r.quantity or 0)
             if r.note:
                 response_map[key]['note'] = r.note
-        elif r.status == 'Complete':
-            response_map[key]['complete'] = True
 
-    # Load prices
     price_map = {p.item_number: p.price for p in ItemPrice.query.all()}
 
-    # Build line items — only items that are missing or red tagged
     line_items = []
     total = 0.0
+
     for num, info in expected_map.items():
         resp = response_map.get(num, {})
         missing_qty = resp.get('missing', 0)
@@ -182,20 +172,20 @@ def generate_billing_invoice(trailer_id):
             'note': resp.get('note', ''),
         })
 
-    # Also add extra tooling items
-    extra_responses = [r for r in responses if (r.category or '').strip().lower() == 'extra tooling']
+    # Extra tooling
     extra_map = defaultdict(lambda: {'missing': 0, 'redtag': 0, 'item_name': '', 'note': ''})
-    for r in extra_responses:
-        key = r.item_number
-        extra_map[key]['item_name'] = r.item_name
-        if r.status == 'Missing':
-            extra_map[key]['missing'] += (r.quantity or 0)
-            if r.note:
-                extra_map[key]['note'] = r.note
-        elif r.status == 'Red Tag':
-            extra_map[key]['redtag'] += (r.quantity or 0)
-            if r.note:
-                extra_map[key]['note'] = r.note
+    for r in responses:
+        if (r.category or '').strip().lower() == 'extra tooling':
+            key = r.item_number
+            extra_map[key]['item_name'] = r.item_name
+            if r.status == 'Missing':
+                extra_map[key]['missing'] += (r.quantity or 0)
+                if r.note:
+                    extra_map[key]['note'] = r.note
+            elif r.status == 'Red Tag':
+                extra_map[key]['redtag'] += (r.quantity or 0)
+                if r.note:
+                    extra_map[key]['note'] = r.note
 
     for num, info in extra_map.items():
         billable_qty = info['missing'] + info['redtag']
@@ -216,6 +206,24 @@ def generate_billing_invoice(trailer_id):
         })
 
     line_items.sort(key=lambda x: (x['item_name'] or '').lower())
+    return line_items, total
+
+
+# ---------- Generate Billing Invoice for a Trailer ----------
+@billing_bp.route('/invoice/<int:trailer_id>')
+@billing_required
+def generate_billing_invoice(trailer_id):
+    import json as _json
+    from models import Invoice as _Invoice
+    trailer = Trailer.query.get_or_404(trailer_id)
+    invoice = _Invoice.query.filter_by(trailer_id=trailer_id).order_by(_Invoice.id.desc()).first()
+
+    # Use frozen snapshot if invoice has been marked billed
+    if invoice and invoice.billed and invoice.line_items_json:
+        line_items = _json.loads(invoice.line_items_json)
+        total = sum(li['line_total'] for li in line_items)
+    else:
+        line_items, total = _compute_line_items(trailer)
 
     return render_template(
         'billing_invoice.html',
@@ -484,13 +492,16 @@ def import_warehouse():
             'quantity', 'qty', 'on hand', 'quantity on hand', 'qty on hand',
             'stock', 'stock on hand', 'inventory', 'count', 'available', 'balance',
         ])
+        col_reorder = find_col([
+            'reorder point', 'reorder', 'reorder qty', 'min stock', 'minimum',
+            'min qty', 'min', 'reorder level', 'minimum stock', 'min quantity',
+        ])
         col_price = find_col([
             'price', 'unit price', 'cost', 'unit cost', 'rate', 'each',
             'unit cost ($)', 'price ($)', 'cost ($)', 'sell price', 'list price',
         ])
 
         if col_num is None or header_row_idx is None:
-            # Show all non-empty cell values from first 10 rows to help diagnose
             sample = []
             for row in ws.iter_rows(min_row=1, max_row=10, values_only=True):
                 for cell in row:
@@ -506,6 +517,78 @@ def import_warehouse():
                 'danger'
             )
             return redirect(url_for('billing.import_warehouse'))
+
+        # --- Parse pricing sheet (date-based) ---
+        price_from_sheet = {}  # item_number -> price
+        best_date = None
+        PRICE_SHEET_NAMES = {'price', 'prices', 'pricing', 'price list', 'price book', 'rate sheet'}
+        price_ws = None
+        for sheet_name in wb.sheetnames:
+            if sheet_name.strip().lower() in PRICE_SHEET_NAMES:
+                price_ws = wb[sheet_name]
+                break
+
+        if price_ws is not None:
+            # Scan up to 10 rows for a header row containing item number
+            p_header_row = None
+            p_headers = []
+            for r_idx, row in enumerate(price_ws.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
+                row_vals = [str(c or '').strip().lower() for c in row]
+                if any(v in ITEM_NUM_CANDIDATES for v in row_vals):
+                    p_header_row = r_idx
+                    p_headers = row_vals
+                    # Also keep raw (un-lowercased) headers for date parsing
+                    p_headers_raw = [price_ws.cell(row=r_idx, column=i+1).value for i in range(len(row_vals))]
+                    break
+
+            if p_header_row is not None:
+                # Find item number column
+                p_col_num = next((i for i, v in enumerate(p_headers) if v in ITEM_NUM_CANDIDATES), None)
+
+                # Find date columns: any header that parses as a date
+                from datetime import date as _date
+                today = datetime.now().date()
+
+                def _try_parse_date(val):
+                    if isinstance(val, datetime):
+                        return val.date()
+                    if isinstance(val, _date):
+                        return val
+                    s = str(val or '').strip()
+                    for fmt in ('%m/%d/%Y', '%Y-%m-%d', '%m/%d/%y', '%m-%d-%Y',
+                                '%B %d, %Y', '%b %d, %Y', '%d-%b-%Y', '%d/%m/%Y'):
+                        try:
+                            return datetime.strptime(s, fmt).date()
+                        except ValueError:
+                            continue
+                    return None
+
+                date_cols = []  # list of (col_index, date)
+                for i, raw_val in enumerate(p_headers_raw):
+                    if i == p_col_num:
+                        continue
+                    d = _try_parse_date(raw_val)
+                    if d is not None:
+                        date_cols.append((i, d))
+
+                if date_cols and p_col_num is not None:
+                    # Pick the most recent date that is <= today;
+                    # fall back to earliest future date if all are in the future
+                    past_dates = [(i, d) for i, d in date_cols if d <= today]
+                    if past_dates:
+                        best_col, best_date = max(past_dates, key=lambda x: x[1])
+                    else:
+                        best_col, best_date = min(date_cols, key=lambda x: x[1])
+
+                    for row in price_ws.iter_rows(min_row=p_header_row + 1, values_only=True):
+                        item_num = str(row[p_col_num] or '').strip()
+                        if not item_num:
+                            continue
+                        try:
+                            price_val = float(row[best_col] or 0)
+                            price_from_sheet[item_num] = price_val
+                        except (ValueError, TypeError, IndexError):
+                            continue
 
         # Pre-load all existing records into dicts to avoid per-row DB queries
         existing_products = {p.item_number: p for p in WarehouseProduct.query.all()}
@@ -525,29 +608,40 @@ def import_warehouse():
             except (ValueError, TypeError):
                 qty = None
             try:
-                price = float(row[col_price] or 0) if col_price is not None else None
+                reorder = int(float(row[col_reorder] or 0)) if col_reorder is not None else None
             except (ValueError, TypeError):
-                price = None
+                reorder = None
+            # Price: prefer price sheet (date-based), fall back to inline column
+            price = price_from_sheet.get(item_number)
+            if price is None and col_price is not None:
+                try:
+                    price = float(row[col_price] or 0)
+                except (ValueError, TypeError):
+                    price = None
 
-            # Upsert WarehouseProduct (no per-row query)
-            if qty is not None:
+            # Upsert WarehouseProduct
+            if qty is not None or reorder is not None:
                 wp = existing_products.get(item_number)
                 if wp:
                     if item_name:
                         wp.item_name = item_name
-                    wp.quantity_on_hand = qty
+                    if qty is not None:
+                        wp.quantity_on_hand = qty
+                    if reorder is not None:
+                        wp.reorder_point = reorder
                     updated += 1
                 else:
                     wp = WarehouseProduct(
                         item_number=item_number,
                         item_name=item_name,
-                        quantity_on_hand=qty,
+                        quantity_on_hand=qty or 0,
+                        reorder_point=reorder or 0,
                     )
                     new_products.append(wp)
-                    existing_products[item_number] = wp  # prevent duplicate adds
+                    existing_products[item_number] = wp
                     added += 1
 
-            # Upsert ItemPrice (no per-row query)
+            # Upsert ItemPrice
             if price is not None:
                 ip = existing_prices.get(item_number)
                 if ip:
@@ -557,7 +651,15 @@ def import_warehouse():
                 else:
                     ip = ItemPrice(item_number=item_number, item_name=item_name, price=price)
                     new_prices.append(ip)
-                    existing_prices[item_number] = ip  # prevent duplicate adds
+                    existing_prices[item_number] = ip
+                priced += 1
+
+        # Upsert prices from the pricing sheet for items not on the stock tab
+        for item_num, price_val in price_from_sheet.items():
+            if item_num not in existing_prices:
+                ip = ItemPrice(item_number=item_num, item_name='', price=price_val)
+                new_prices.append(ip)
+                existing_prices[item_num] = ip
                 priced += 1
 
         if new_products:
@@ -565,7 +667,13 @@ def import_warehouse():
         if new_prices:
             db.session.add_all(new_prices)
         db.session.commit()
-        flash(f'Import complete: {added} products added, {updated} updated, {priced} prices set.', 'success')
+
+        price_sheet_msg = (f', prices from "{price_ws.title}" tab (effective date: {best_date})'
+                           if price_from_sheet and best_date else '')
+        flash(
+            f'Import complete: {added} products added, {updated} updated, {priced} prices set{price_sheet_msg}.',
+            'success'
+        )
         return redirect(url_for('billing.warehouse_inventory'))
 
     return render_template('billing_import.html')

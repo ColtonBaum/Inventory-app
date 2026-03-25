@@ -144,8 +144,18 @@ def delete_invoice(invoice_id):
 
 @inventory_bp.route('/invoice/<int:invoice_id>/toggle-billed', methods=['POST'])
 def toggle_billed(invoice_id):
+    import json as _json
     invoice = Invoice.query.get_or_404(invoice_id)
     invoice.billed = not invoice.billed
+
+    # Snapshot current prices when marking as billed so they never change
+    if invoice.billed and not invoice.line_items_json:
+        from routes.billing import _compute_line_items
+        trailer = Trailer.query.get(invoice.trailer_id)
+        if trailer:
+            line_items, _ = _compute_line_items(trailer)
+            invoice.line_items_json = _json.dumps(line_items)
+
     db.session.commit()
     return redirect(url_for('inventory.view_invoices'))
 

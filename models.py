@@ -78,6 +78,10 @@ class Invoice(db.Model):
     file_path = db.Column(db.String(255))
     billed = db.Column(db.Boolean, nullable=False, server_default='false', default=False)
 
+    # Snapshot of line items at time of billing (JSON). Once populated, invoice
+    # prices are frozen and won't change when ItemPrice is updated.
+    line_items_json = db.Column(db.Text, nullable=True)
+
     # Timestamp (DB-side default)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False, index=True)
 
