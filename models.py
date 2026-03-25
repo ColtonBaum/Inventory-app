@@ -134,6 +134,7 @@ class WarehouseOrder(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     trailer_id = db.Column(db.Integer, db.ForeignKey('trailer.id'), nullable=True, index=True)
+    order_type = db.Column(db.String(20), default='SALE')  # SALE or PURCHASE
     status = db.Column(db.String(50), default='Pending')  # Pending, Billed, Cancelled
     billed = db.Column(db.Boolean, default=False, nullable=False)
     order_total = db.Column(db.Float, default=0.0)

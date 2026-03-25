@@ -313,18 +313,22 @@ def mark_order_billed(order_id):
     order_total = 0.0
     unmatched = []
 
+    is_purchase = (order.order_type == 'PURCHASE')
+
     for line in order.lines:
         name_key = (line.item_name or '').strip().lower()
         product = products_by_name.get(name_key)
 
         if product:
-            # Deduct inventory
-            product.quantity_on_hand -= line.quantity
-            # Snapshot price
+            # SALE: remove from stock. PURCHASE: add to stock.
+            if is_purchase:
+                product.quantity_on_hand += line.quantity
+            else:
+                product.quantity_on_hand -= line.quantity
             unit_price = price_map.get(product.item_number.upper(), product.unit_cost or 0.0)
             line.unit_price = unit_price
             line.line_total = unit_price * line.quantity
-            line.item_number = product.item_number  # record matched item number
+            line.item_number = product.item_number
         else:
             line.unit_price = 0.0
             line.line_total = 0.0
@@ -337,11 +341,12 @@ def mark_order_billed(order_id):
     order.order_total = order_total
     db.session.commit()
 
+    action = 'received into' if is_purchase else 'deducted from'
     if unmatched:
-        flash(f'Order billed. Note: {len(unmatched)} item(s) not matched in warehouse stock '
-              f'(no inventory deducted): {", ".join(unmatched[:5])}.', 'warning')
+        flash(f'Order billed. {len(unmatched)} item(s) not matched in warehouse stock '
+              f'(inventory not updated): {", ".join(unmatched[:5])}.', 'warning')
     else:
-        flash(f'Order billed. Total: ${order_total:,.2f}. Inventory updated.', 'success')
+        flash(f'Order billed. Total: ${order_total:,.2f}. Inventory {action} stock.', 'success')
     return redirect(url_for('billing.view_order', order_id=order_id))
 
 
@@ -699,12 +704,14 @@ def import_warehouse():
 @billing_required
 def metrics():
     from sqlalchemy import func
+    from datetime import timedelta
+
+    # --- Trailer stats ---
     total_trailers = Trailer.query.count()
     completed_trailers = Trailer.query.filter_by(status='Completed').count()
     pending_trailers = Trailer.query.filter_by(status='Pending').count()
     in_progress_trailers = Trailer.query.filter_by(status='In Progress').count()
 
-    # Most frequently flagged items (Missing or Red Tag)
     flagged_counts = (
         db.session.query(
             InventoryResponse.item_name,
@@ -718,18 +725,100 @@ def metrics():
         .all()
     )
 
-    # Warehouse low-stock items
     low_stock = WarehouseProduct.query.filter(
         WarehouseProduct.quantity_on_hand <= WarehouseProduct.reorder_point
     ).all()
 
-    # Orders by status
     order_counts = (
         db.session.query(WarehouseOrder.status, func.count(WarehouseOrder.id))
-        .group_by(WarehouseOrder.status)
-        .all()
+        .group_by(WarehouseOrder.status).all()
     )
     order_status_map = {s: c for s, c in order_counts}
+
+    # --- Monthly sales/purchases (last 12 months) ---
+    twelve_ago = datetime.now() - timedelta(days=365)
+    monthly_rows = (
+        db.session.query(
+            func.date_trunc('month', WarehouseOrder.created_at).label('month'),
+            WarehouseOrder.order_type,
+            func.count(WarehouseOrder.id).label('order_count'),
+            func.coalesce(func.sum(WarehouseOrder.order_total), 0).label('total_value'),
+        )
+        .filter(WarehouseOrder.billed == True)
+        .filter(WarehouseOrder.created_at >= twelve_ago)
+        .group_by('month', WarehouseOrder.order_type)
+        .order_by('month')
+        .all()
+    )
+    # Pivot: {month_str -> {SALE: {count,value}, PURCHASE: {count,value}}}
+    monthly_data = {}
+    for row in monthly_rows:
+        key = row.month.strftime('%b %Y') if row.month else 'Unknown'
+        if key not in monthly_data:
+            monthly_data[key] = {
+                'SALE':     {'count': 0, 'value': 0.0},
+                'PURCHASE': {'count': 0, 'value': 0.0},
+            }
+        otype = (row.order_type or 'SALE').upper()
+        if otype in monthly_data[key]:
+            monthly_data[key][otype] = {'count': row.order_count, 'value': float(row.total_value or 0)}
+    months_list = list(monthly_data.keys())  # already ordered from query
+
+    # --- Item date-range lookup ---
+    item_search    = (request.args.get('item_search') or '').strip()
+    from_date_str  = (request.args.get('from_date') or '').strip()
+    to_date_str    = (request.args.get('to_date') or '').strip()
+    otype_filter   = (request.args.get('order_type_filter') or '').strip().upper()
+    item_results   = []
+    item_totals    = {'qty': 0, 'value': 0.0}
+
+    if item_search or (from_date_str and to_date_str):
+        q = (
+            db.session.query(
+                WarehouseOrderLine.item_name,
+                WarehouseOrderLine.item_number,
+                WarehouseOrder.order_type,
+                func.sum(WarehouseOrderLine.quantity).label('total_qty'),
+                func.coalesce(func.sum(WarehouseOrderLine.line_total), 0).label('total_value'),
+                func.count(WarehouseOrderLine.id).label('order_count'),
+            )
+            .join(WarehouseOrder, WarehouseOrderLine.order_id == WarehouseOrder.id)
+            .filter(WarehouseOrder.billed == True)
+        )
+        if item_search:
+            q = q.filter(
+                db.or_(
+                    WarehouseOrderLine.item_name.ilike(f'%{item_search}%'),
+                    WarehouseOrderLine.item_number.ilike(f'%{item_search}%'),
+                )
+            )
+        if from_date_str:
+            try:
+                q = q.filter(WarehouseOrder.created_at >= datetime.strptime(from_date_str, '%Y-%m-%d'))
+            except ValueError:
+                pass
+        if to_date_str:
+            try:
+                end = datetime.strptime(to_date_str, '%Y-%m-%d') + timedelta(days=1)
+                q = q.filter(WarehouseOrder.created_at < end)
+            except ValueError:
+                pass
+        if otype_filter in ('SALE', 'PURCHASE'):
+            q = q.filter(WarehouseOrder.order_type == otype_filter)
+
+        item_results = (
+            q.group_by(
+                WarehouseOrderLine.item_name,
+                WarehouseOrderLine.item_number,
+                WarehouseOrder.order_type,
+            )
+            .order_by(func.sum(WarehouseOrderLine.quantity).desc())
+            .all()
+        )
+        item_totals = {
+            'qty':   sum(r.total_qty or 0 for r in item_results),
+            'value': sum(float(r.total_value or 0) for r in item_results),
+        }
 
     return render_template(
         'billing_metrics.html',
@@ -740,6 +829,14 @@ def metrics():
         flagged_counts=flagged_counts,
         low_stock=low_stock,
         order_status_map=order_status_map,
+        monthly_data=monthly_data,
+        months_list=months_list,
+        item_results=item_results,
+        item_totals=item_totals,
+        item_search=item_search,
+        from_date_str=from_date_str,
+        to_date_str=to_date_str,
+        otype_filter=otype_filter,
     )
 
 

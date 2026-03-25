@@ -37,6 +37,7 @@ def init_db(app):
             "ALTER TABLE trailer ADD COLUMN IF NOT EXISTS notes TEXT",
             "ALTER TABLE invoice ADD COLUMN IF NOT EXISTS billed BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE invoice ADD COLUMN IF NOT EXISTS line_items_json TEXT",
+            "ALTER TABLE warehouse_order ADD COLUMN IF NOT EXISTS order_type VARCHAR(20) DEFAULT 'SALE'",
             "ALTER TABLE warehouse_order ADD COLUMN IF NOT EXISTS billed BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE warehouse_order ADD COLUMN IF NOT EXISTS order_total FLOAT DEFAULT 0.0",
             "ALTER TABLE warehouse_order ADD COLUMN IF NOT EXISTS requester_name VARCHAR(100)",

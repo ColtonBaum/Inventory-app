@@ -21,9 +21,14 @@ def new_order():
         trailer_id_raw = request.form.get('trailer_id') or None
         trailer_id = int(trailer_id_raw) if trailer_id_raw else None
 
+        order_type = request.form.get('order_type', 'SALE').upper()
+        if order_type not in ('SALE', 'PURCHASE'):
+            order_type = 'SALE'
+
         order = WarehouseOrder(
             trailer_id=trailer_id,
             requester_name=requester_name,
+            order_type=order_type,
             status='Pending',
             billed=False,
             notes=notes,

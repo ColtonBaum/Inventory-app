@@ -15,31 +15,163 @@
 </div>
 
 <!-- Stat cards -->
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;">
   <div class="card" style="padding:20px 24px;">
-    <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Total Trailers</div>
-    <div style="font-size:36px;font-weight:700;margin-top:6px;">{{ total_trailers }}</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Total Trailers</div>
+    <div style="font-size:34px;font-weight:700;margin-top:6px;">{{ total_trailers }}</div>
   </div>
   <div class="card" style="padding:20px 24px;">
-    <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Completed</div>
-    <div style="font-size:36px;font-weight:700;margin-top:6px;color:var(--accent);">{{ completed_trailers }}</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Completed</div>
+    <div style="font-size:34px;font-weight:700;margin-top:6px;color:var(--accent);">{{ completed_trailers }}</div>
   </div>
   <div class="card" style="padding:20px 24px;">
-    <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">In Progress</div>
-    <div style="font-size:36px;font-weight:700;margin-top:6px;color:var(--accent-2);">{{ in_progress_trailers }}</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">In Progress</div>
+    <div style="font-size:34px;font-weight:700;margin-top:6px;">{{ in_progress_trailers }}</div>
   </div>
   <div class="card" style="padding:20px 24px;">
-    <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Pending</div>
-    <div style="font-size:36px;font-weight:700;margin-top:6px;color:var(--warning);">{{ pending_trailers }}</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Pending Orders</div>
+    <div style="font-size:34px;font-weight:700;margin-top:6px;color:var(--warning);">{{ order_status_map.get('Pending', 0) }}</div>
   </div>
   <div class="card" style="padding:20px 24px;">
-    <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Pending Orders</div>
-    <div style="font-size:36px;font-weight:700;margin-top:6px;color:var(--warning);">{{ order_status_map.get('Pending', 0) }}</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Billed Orders</div>
+    <div style="font-size:34px;font-weight:700;margin-top:6px;color:var(--accent);">{{ order_status_map.get('Billed', 0) }}</div>
   </div>
-  <div class="card" style="padding:20px 24px;">
-    <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Fulfilled Orders</div>
-    <div style="font-size:36px;font-weight:700;margin-top:6px;color:var(--accent);">{{ order_status_map.get('Fulfilled', 0) }}</div>
+</div>
+
+<!-- Monthly Sales & Purchases -->
+<div class="card" style="margin-bottom:24px;">
+  <div class="card-header">
+    <h3 style="margin:0;font-size:16px;font-weight:700;">Monthly Sales &amp; Purchases (Last 12 Months)</h3>
   </div>
+  {% if months_list %}
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th style="text-align:center;">Sales Orders</th>
+          <th style="text-align:right;">Sales Total</th>
+          <th style="text-align:center;">Purchase Orders</th>
+          <th style="text-align:right;">Purchase Total</th>
+          <th style="text-align:right;">Net</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set grand_sales = namespace(v=0) %}
+        {% set grand_pur   = namespace(v=0) %}
+        {% for month in months_list %}
+        {% set s = monthly_data[month]['SALE'] %}
+        {% set p = monthly_data[month]['PURCHASE'] %}
+        {% set net = s['value'] - p['value'] %}
+        {% set _ = grand_sales.__setattr__('v', grand_sales.v + s['value']) %}
+        {% set _ = grand_pur.__setattr__('v', grand_pur.v + p['value']) %}
+        <tr>
+          <td style="font-weight:600;">{{ month }}</td>
+          <td style="text-align:center;color:var(--muted);">{{ s['count'] }}</td>
+          <td style="text-align:right;font-weight:600;color:#166534;">${{ '%.2f'|format(s['value']) }}</td>
+          <td style="text-align:center;color:var(--muted);">{{ p['count'] }}</td>
+          <td style="text-align:right;font-weight:600;color:#1e40af;">${{ '%.2f'|format(p['value']) }}</td>
+          <td style="text-align:right;font-weight:700;{% if net >= 0 %}color:#166534;{% else %}color:#dc2626;{% endif %}">
+            {{ '+' if net >= 0 else '' }}${{ '%.2f'|format(net) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid var(--border);">
+          <td style="font-weight:700;padding:10px 12px;">Total</td>
+          <td></td>
+          <td style="text-align:right;font-weight:700;color:#166534;padding:10px 12px;">${{ '%.2f'|format(grand_sales.v) }}</td>
+          <td></td>
+          <td style="text-align:right;font-weight:700;color:#1e40af;padding:10px 12px;">${{ '%.2f'|format(grand_pur.v) }}</td>
+          <td style="text-align:right;font-weight:700;padding:10px 12px;">
+            {% set net_total = grand_sales.v - grand_pur.v %}
+            {{ '+' if net_total >= 0 else '' }}${{ '%.2f'|format(net_total) }}
+          </td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div style="padding:32px;text-align:center;color:var(--muted);">No billed orders in the last 12 months yet.</div>
+  {% endif %}
+</div>
+
+<!-- Item Date Range Lookup -->
+<div class="card" style="margin-bottom:24px;">
+  <div class="card-header">
+    <h3 style="margin:0;font-size:16px;font-weight:700;">Item Activity Lookup</h3>
+  </div>
+  <form method="GET" action="{{ url_for('billing.metrics') }}" style="padding:16px;display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:12px;align-items:end;">
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Search Item</label>
+      <input type="text" name="item_search" value="{{ item_search }}" placeholder="Name or item number…" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">From Date</label>
+      <input type="date" name="from_date" value="{{ from_date_str }}" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">To Date</label>
+      <input type="date" name="to_date" value="{{ to_date_str }}" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div>
+      <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Type</label>
+      <select name="order_type_filter" style="width:100%;box-sizing:border-box;">
+        <option value="">All</option>
+        <option value="SALE" {% if otype_filter=='SALE' %}selected{% endif %}>Sales</option>
+        <option value="PURCHASE" {% if otype_filter=='PURCHASE' %}selected{% endif %}>Purchases</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:6px;">
+      <button class="btn primary" type="submit">Search</button>
+      <a class="btn ghost" href="{{ url_for('billing.metrics') }}">Clear</a>
+    </div>
+  </form>
+
+  {% if item_results %}
+  <div class="table-wrapper" style="border-top:1px solid var(--border);">
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Item #</th>
+          <th style="text-align:center;">Type</th>
+          <th style="text-align:center;">Orders</th>
+          <th style="text-align:center;">Total Qty</th>
+          <th style="text-align:right;">Total Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in item_results %}
+        <tr>
+          <td style="font-weight:600;">{{ row.item_name or '—' }}</td>
+          <td style="font-size:13px;color:var(--muted);">{{ row.item_number or '—' }}</td>
+          <td style="text-align:center;">
+            {% if row.order_type == 'PURCHASE' %}
+              <span class="chip" style="background:#dbeafe;color:#1e40af;">Purchase</span>
+            {% else %}
+              <span class="chip" style="background:#dcfce7;color:#166534;">Sale</span>
+            {% endif %}
+          </td>
+          <td style="text-align:center;color:var(--muted);">{{ row.order_count }}</td>
+          <td style="text-align:center;font-weight:700;font-size:16px;">{{ row.total_qty }}</td>
+          <td style="text-align:right;font-weight:600;">${{ '%.2f'|format(row.total_value) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid var(--border);">
+          <td colspan="4" style="font-weight:700;padding:10px 12px;">Totals</td>
+          <td style="text-align:center;font-weight:700;padding:10px 12px;">{{ item_totals.qty }}</td>
+          <td style="text-align:right;font-weight:700;padding:10px 12px;">${{ '%.2f'|format(item_totals.value) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% elif item_search or (from_date_str and to_date_str) %}
+  <div style="padding:32px;text-align:center;color:var(--muted);">No billed orders matched your search.</div>
+  {% endif %}
 </div>
 
 <div class="grid two" style="gap:20px;">
@@ -49,13 +181,11 @@
       <h3 style="margin:0;font-size:16px;font-weight:700;">Top Flagged Items (Missing / Red Tag)</h3>
     </div>
     <div class="card-body" style="padding:0;">
-      <div class="table-wrap">
+      <div class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Item #</th>
-              <th>Item Name</th>
-              <th style="text-align:center;">Times Flagged</th>
+              <th>Item #</th><th>Item Name</th><th style="text-align:center;">Times Flagged</th>
             </tr>
           </thead>
           <tbody>
@@ -78,15 +208,14 @@
   <div class="card">
     <div class="card-header">
       <h3 style="margin:0;font-size:16px;font-weight:700;">Low Stock Items</h3>
-      <a class="btn ghost small" href="{{ url_for('billing.warehouse_inventory') }}">View All Stock</a>
+      <a class="btn ghost small" href="{{ url_for('billing.warehouse_inventory') }}">View All</a>
     </div>
     <div class="card-body" style="padding:0;">
-      <div class="table-wrap">
+      <div class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Item #</th>
-              <th>Item Name</th>
+              <th>Item #</th><th>Item Name</th>
               <th style="text-align:center;">On Hand</th>
               <th style="text-align:center;">Reorder At</th>
             </tr>
@@ -96,11 +225,11 @@
             <tr>
               <td style="color:var(--muted);font-size:13px;">{{ p.item_number }}</td>
               <td style="font-weight:600;">{{ p.item_name or '—' }}</td>
-              <td style="text-align:center;font-weight:700;color:var(--danger);">{{ p.quantity_on_hand }}</td>
+              <td style="text-align:center;font-weight:700;color:#dc2626;">{{ p.quantity_on_hand }}</td>
               <td style="text-align:center;color:var(--muted);">{{ p.reorder_point }}</td>
             </tr>
             {% else %}
-            <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted);">All items are sufficiently stocked.</td></tr>
+            <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted);">All items sufficiently stocked.</td></tr>
             {% endfor %}
           </tbody>
         </table>
