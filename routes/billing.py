@@ -289,10 +289,59 @@ def view_order(order_id):
 def update_order_status(order_id):
     order = WarehouseOrder.query.get_or_404(order_id)
     new_status = request.form.get('status', order.status)
-    if new_status in ('Pending', 'Fulfilled', 'Cancelled'):
+    if new_status in ('Pending', 'Cancelled'):
         order.status = new_status
         db.session.commit()
         flash(f'Order status updated to {new_status}.', 'success')
+    return redirect(url_for('billing.view_order', order_id=order_id))
+
+
+@billing_bp.route('/warehouse/orders/<int:order_id>/bill', methods=['POST'])
+@billing_required
+def mark_order_billed(order_id):
+    """Mark an order as billed: match items by name, deduct inventory, snapshot prices."""
+    order = WarehouseOrder.query.get_or_404(order_id)
+    if order.billed:
+        flash('Order is already billed.', 'warning')
+        return redirect(url_for('billing.view_order', order_id=order_id))
+
+    # Build lookup maps: name (lower) -> product, item_number (upper) -> price
+    products_by_name = {(p.item_name or '').strip().lower(): p
+                        for p in WarehouseProduct.query.all() if p.item_name}
+    price_map = {p.item_number.upper(): p.price for p in ItemPrice.query.all()}
+
+    order_total = 0.0
+    unmatched = []
+
+    for line in order.lines:
+        name_key = (line.item_name or '').strip().lower()
+        product = products_by_name.get(name_key)
+
+        if product:
+            # Deduct inventory
+            product.quantity_on_hand -= line.quantity
+            # Snapshot price
+            unit_price = price_map.get(product.item_number.upper(), product.unit_cost or 0.0)
+            line.unit_price = unit_price
+            line.line_total = unit_price * line.quantity
+            line.item_number = product.item_number  # record matched item number
+        else:
+            line.unit_price = 0.0
+            line.line_total = 0.0
+            unmatched.append(line.item_name or '(unnamed)')
+
+        order_total += line.line_total
+
+    order.billed = True
+    order.status = 'Billed'
+    order.order_total = order_total
+    db.session.commit()
+
+    if unmatched:
+        flash(f'Order billed. Note: {len(unmatched)} item(s) not matched in warehouse stock '
+              f'(no inventory deducted): {", ".join(unmatched[:5])}.', 'warning')
+    else:
+        flash(f'Order billed. Total: ${order_total:,.2f}. Inventory updated.', 'success')
     return redirect(url_for('billing.view_order', order_id=order_id))
 
 
@@ -392,11 +441,22 @@ def import_warehouse():
 
         try:
             import openpyxl
-            wb = openpyxl.load_workbook(f, data_only=True)
-            ws = wb.active
+            # read_only=True streams the file instead of loading everything into memory
+            wb = openpyxl.load_workbook(f, data_only=True, read_only=True)
         except Exception as e:
             flash(f'Could not read Excel file: {e}', 'danger')
             return redirect(url_for('billing.import_warehouse'))
+
+        # Find the inventory/products sheet (prefer named sheets over active)
+        PRODUCT_SHEET_NAMES = {'products', 'product', 'inventory', 'stock', 'warehouse stock',
+                                'items', 'catalog', 'warehouse', 'item list'}
+        ws = None
+        for sname in wb.sheetnames:
+            if sname.strip().lower() in PRODUCT_SHEET_NAMES:
+                ws = wb[sname]
+                break
+        if ws is None:
+            ws = wb[wb.sheetnames[0]]  # fall back to first sheet
 
         # Scan up to 10 rows to find the actual header row
         ITEM_NUM_CANDIDATES = {
@@ -551,45 +611,10 @@ def import_warehouse():
                     price_from_sheet[item_id] = sales_price if sales_price else purchase_price
                 break  # only process first matching sheet
 
-        # --- Deduplicate existing DB records by case-normalizing item_number ---
-        # Merge any records that differ only in case
-        all_products = WarehouseProduct.query.order_by(WarehouseProduct.id).all()
-        seen_upper = {}  # upper -> canonical product
-        for wp in all_products:
-            key = wp.item_number.upper()
-            if key in seen_upper:
-                # Merge into the canonical record then delete this duplicate
-                canon = seen_upper[key]
-                if not canon.item_name and wp.item_name:
-                    canon.item_name = wp.item_name
-                if wp.quantity_on_hand and not canon.quantity_on_hand:
-                    canon.quantity_on_hand = wp.quantity_on_hand
-                if wp.reorder_point and not canon.reorder_point:
-                    canon.reorder_point = wp.reorder_point
-                if wp.unit_cost and not canon.unit_cost:
-                    canon.unit_cost = wp.unit_cost
-                # Normalize canonical item_number to uppercase
-                canon.item_number = key
-                db.session.delete(wp)
-            else:
-                wp.item_number = key  # normalize to uppercase
-                seen_upper[key] = wp
-
-        all_prices = ItemPrice.query.order_by(ItemPrice.id).all()
-        seen_price_upper = {}
-        for ip in all_prices:
-            key = ip.item_number.upper()
-            if key in seen_price_upper:
-                db.session.delete(ip)
-            else:
-                ip.item_number = key
-                seen_price_upper[key] = ip
-
-        db.session.flush()
-
-        # Pre-load normalized dicts after dedup
-        existing_products = {p.item_number: p for p in WarehouseProduct.query.all()}
-        existing_prices = {p.item_number: p for p in ItemPrice.query.all()}
+        # Pre-load existing records with UPPERCASE keys for case-insensitive matching
+        # This avoids duplicates without touching existing DB records
+        existing_products = {p.item_number.upper(): p for p in WarehouseProduct.query.all()}
+        existing_prices = {p.item_number.upper(): p for p in ItemPrice.query.all()}
 
         added = updated = priced = 0
         new_products = []

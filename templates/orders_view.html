@@ -5,7 +5,7 @@
 <div class="card" style="max-width:700px;margin:0 auto;">
   <div class="card-header">
     <div>
-      <div style="font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Order Confirmation</div>
+      <div style="font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Warehouse Order</div>
       <h2 style="margin:0;font-size:22px;">#{{ order.id }}</h2>
     </div>
     <a class="btn ghost small" href="{{ url_for('orders.orders_list') }}">All Orders</a>
@@ -13,12 +13,12 @@
 
   <!-- Status banner -->
   <div style="padding:14px 20px;border-bottom:1px solid var(--border);
-    background:{% if order.status == 'Fulfilled' %}#dcfce7{% elif order.status == 'Cancelled' %}#fee2e2{% else %}#fef3c7{% endif %};">
+    background:{% if order.billed %}#dcfce7{% elif order.status == 'Cancelled' %}#fee2e2{% else %}#fef3c7{% endif %};">
     <div style="font-size:14px;font-weight:700;
-      color:{% if order.status == 'Fulfilled' %}#166534{% elif order.status == 'Cancelled' %}#991b1b{% else %}#92400e{% endif %};">
-      {% if order.status == 'Fulfilled' %}✓ Order Fulfilled
+      color:{% if order.billed %}#166534{% elif order.status == 'Cancelled' %}#991b1b{% else %}#92400e{% endif %};">
+      {% if order.billed %}✓ Billed — inventory updated, total ${{ '%.2f'|format(order.order_total or 0) }}
       {% elif order.status == 'Cancelled' %}✕ Order Cancelled
-      {% else %}⏳ Order Pending — your request has been received
+      {% else %}⏳ Pending — awaiting billing review
       {% endif %}
     </div>
   </div>
@@ -29,14 +29,16 @@
       <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Date Submitted</div>
       <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ order.created_at.strftime('%b %d, %Y') if order.created_at else '—' }}</div>
     </div>
+    {% if order.requester_name %}
+    <div>
+      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Requested By</div>
+      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ order.requester_name }}</div>
+    </div>
+    {% endif %}
     {% if trailer %}
     <div>
       <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Job</div>
       <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ trailer.job_name or '—' }}</div>
-    </div>
-    <div>
-      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Job Number</div>
-      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ trailer.job_number or '—' }}</div>
     </div>
     {% endif %}
     {% if order.notes %}
@@ -53,22 +55,38 @@
       <table>
         <thead>
           <tr>
-            <th>Item #</th>
-            <th>Item Name</th>
-            <th style="text-align:center;">Quantity</th>
+            <th>Description</th>
+            <th style="text-align:center;">Qty</th>
+            {% if order.billed %}
+            <th style="text-align:right;">Unit Price</th>
+            <th style="text-align:right;">Total</th>
+            {% endif %}
           </tr>
         </thead>
         <tbody>
           {% for line in order.lines %}
           <tr>
-            <td style="color:var(--muted);font-size:13px;">{{ line.item_number or '—' }}</td>
-            <td style="font-weight:600;">{{ line.item_name or '—' }}</td>
+            <td style="font-weight:600;">{{ line.item_name or '—' }}
+              {% if line.item_number %}<span style="font-size:12px;color:var(--muted);font-weight:400;"> — {{ line.item_number }}</span>{% endif %}
+            </td>
             <td style="text-align:center;font-weight:700;font-size:16px;">{{ line.quantity }}</td>
+            {% if order.billed %}
+            <td style="text-align:right;">${{ '%.2f'|format(line.unit_price or 0) }}</td>
+            <td style="text-align:right;font-weight:600;">${{ '%.2f'|format(line.line_total or 0) }}</td>
+            {% endif %}
           </tr>
           {% else %}
-          <tr><td colspan="3" style="text-align:center;padding:32px;color:var(--muted);">No items on this order.</td></tr>
+          <tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted);">No items on this order.</td></tr>
           {% endfor %}
         </tbody>
+        {% if order.billed and order.lines %}
+        <tfoot>
+          <tr>
+            <td colspan="3" style="text-align:right;font-weight:700;padding:10px 12px;border-top:2px solid var(--border);">Order Total</td>
+            <td style="text-align:right;font-weight:700;font-size:18px;padding:10px 12px;border-top:2px solid var(--border);">${{ '%.2f'|format(order.order_total or 0) }}</td>
+          </tr>
+        </tfoot>
+        {% endif %}
       </table>
     </div>
   </div>

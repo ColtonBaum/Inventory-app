@@ -18,18 +18,27 @@
   <div class="card-header">
     <div>
       <div style="font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px;">Order</div>
-      <h2 style="margin:0;font-size:22px;">#{{ order.id }}</h2>
+      <h2 style="margin:0;font-size:22px;">#{{ order.id }}
+        {% if order.billed %}<span class="chip green" style="font-size:14px;vertical-align:middle;margin-left:8px;">Billed</span>
+        {% elif order.status == 'Cancelled' %}<span class="chip red" style="font-size:14px;vertical-align:middle;margin-left:8px;">Cancelled</span>
+        {% else %}<span class="chip amber" style="font-size:14px;vertical-align:middle;margin-left:8px;">Pending</span>{% endif %}
+      </h2>
     </div>
     <div class="actions-row">
-      <!-- Status update form -->
-      <form method="POST" action="{{ url_for('billing.update_order_status', order_id=order.id) }}" style="display:flex;gap:6px;align-items:center;">
-        <select name="status" style="font-size:13px;padding:8px 12px;">
-          <option value="Pending" {% if order.status=='Pending' %}selected{% endif %}>Pending</option>
-          <option value="Fulfilled" {% if order.status=='Fulfilled' %}selected{% endif %}>Fulfilled</option>
-          <option value="Cancelled" {% if order.status=='Cancelled' %}selected{% endif %}>Cancelled</option>
-        </select>
-        <button class="btn ghost small" type="submit">Update</button>
+      {% if not order.billed %}
+      <!-- Mark as Billed -->
+      <form method="POST" action="{{ url_for('billing.mark_order_billed', order_id=order.id) }}"
+            onsubmit="return confirm('Mark this order as billed? This will deduct inventory and lock pricing.')">
+        <button class="btn primary small" type="submit">Mark as Billed</button>
       </form>
+      <!-- Cancel -->
+      <form method="POST" action="{{ url_for('billing.update_order_status', order_id=order.id) }}"
+            style="display:inline;">
+        <input type="hidden" name="status" value="Cancelled">
+        <button class="btn ghost small" type="submit" style="color:#dc2626;"
+                onclick="return confirm('Cancel this order?')">Cancel Order</button>
+      </form>
+      {% endif %}
       <a class="btn ghost small" href="{{ url_for('billing.warehouse_orders') }}">Back</a>
     </div>
   </div>
@@ -40,32 +49,28 @@
       <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Date</div>
       <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ order.created_at.strftime('%Y-%m-%d') if order.created_at else '—' }}</div>
     </div>
+    {% if order.requester_name %}
     <div>
-      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Status</div>
-      <div style="font-size:16px;font-weight:600;margin-top:2px;">
-        {% if order.status == 'Fulfilled' %}
-          <span class="chip green">Fulfilled</span>
-        {% elif order.status == 'Cancelled' %}
-          <span class="chip red">Cancelled</span>
-        {% else %}
-          <span class="chip amber">Pending</span>
-        {% endif %}
-      </div>
+      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Requested By</div>
+      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ order.requester_name }}</div>
     </div>
+    {% endif %}
     {% if trailer %}
     <div>
-      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Job Name</div>
-      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ trailer.job_name or '—' }}</div>
+      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Job</div>
+      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ trailer.job_name or '—' }}{% if trailer.job_number %} ({{ trailer.job_number }}){% endif %}</div>
     </div>
+    {% endif %}
+    {% if order.billed %}
     <div>
-      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Job Number</div>
-      <div style="font-size:16px;font-weight:600;margin-top:2px;">{{ trailer.job_number or '—' }}</div>
+      <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Order Total</div>
+      <div style="font-size:20px;font-weight:700;color:#166534;margin-top:2px;">${{ '%.2f'|format(order.order_total or 0) }}</div>
     </div>
     {% endif %}
     {% if order.notes %}
     <div style="grid-column:1/-1;">
       <div style="font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;">Notes</div>
-      <div style="font-size:15px;margin-top:2px;">{{ order.notes }}</div>
+      <div style="font-size:15px;margin-top:2px;white-space:pre-line;">{{ order.notes }}</div>
     </div>
     {% endif %}
   </div>
@@ -75,22 +80,38 @@
       <table>
         <thead>
           <tr>
-            <th>Item #</th>
-            <th>Item Name</th>
-            <th style="text-align:center;">Quantity</th>
+            <th>Description</th>
+            <th style="text-align:center;">Qty</th>
+            {% if order.billed %}
+            <th style="text-align:right;">Unit Price</th>
+            <th style="text-align:right;">Line Total</th>
+            {% endif %}
           </tr>
         </thead>
         <tbody>
           {% for line in order.lines %}
           <tr>
-            <td style="color:var(--muted);font-size:13px;">{{ line.item_number }}</td>
-            <td style="font-weight:600;">{{ line.item_name or '—' }}</td>
+            <td style="font-weight:600;">{{ line.item_name or '—' }}
+              {% if line.item_number %}<span style="font-size:12px;color:var(--muted);font-weight:400;"> — {{ line.item_number }}</span>{% endif %}
+            </td>
             <td style="text-align:center;font-weight:700;font-size:16px;">{{ line.quantity }}</td>
+            {% if order.billed %}
+            <td style="text-align:right;">${{ '%.2f'|format(line.unit_price or 0) }}</td>
+            <td style="text-align:right;font-weight:600;">${{ '%.2f'|format(line.line_total or 0) }}</td>
+            {% endif %}
           </tr>
           {% else %}
-          <tr><td colspan="3" style="text-align:center;padding:32px;color:var(--muted);">No line items on this order.</td></tr>
+          <tr><td colspan="4" style="text-align:center;padding:32px;color:var(--muted);">No items on this order.</td></tr>
           {% endfor %}
         </tbody>
+        {% if order.billed and order.lines %}
+        <tfoot>
+          <tr>
+            <td colspan="3" style="text-align:right;font-weight:700;padding:10px 12px;border-top:2px solid var(--border);">Order Total</td>
+            <td style="text-align:right;font-weight:700;font-size:18px;padding:10px 12px;border-top:2px solid var(--border);">${{ '%.2f'|format(order.order_total or 0) }}</td>
+          </tr>
+        </tfoot>
+        {% endif %}
       </table>
     </div>
   </div>

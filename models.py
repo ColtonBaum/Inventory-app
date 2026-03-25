@@ -134,7 +134,10 @@ class WarehouseOrder(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     trailer_id = db.Column(db.Integer, db.ForeignKey('trailer.id'), nullable=True, index=True)
-    status = db.Column(db.String(50), default='Pending')  # Pending, Fulfilled, Cancelled
+    status = db.Column(db.String(50), default='Pending')  # Pending, Billed, Cancelled
+    billed = db.Column(db.Boolean, default=False, nullable=False)
+    order_total = db.Column(db.Float, default=0.0)
+    requester_name = db.Column(db.String(100))
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, server_default=db.func.now(), nullable=False, index=True)
 
@@ -149,9 +152,11 @@ class WarehouseOrderLine(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('warehouse_order.id'), nullable=False, index=True)
-    item_number = db.Column(db.String(50))
+    item_number = db.Column(db.String(50), nullable=True)  # optional — matched at billing time
     item_name = db.Column(db.String(120))
     quantity = db.Column(db.Integer, default=0)
+    unit_price = db.Column(db.Float, default=0.0)   # snapshot at billing time
+    line_total = db.Column(db.Float, default=0.0)   # snapshot at billing time
 
     def __repr__(self):
         return f"<WarehouseOrderLine order_id={self.order_id} item={self.item_number!r} qty={self.quantity}>"
