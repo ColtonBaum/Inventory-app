@@ -43,6 +43,9 @@ def init_db(app):
             "ALTER TABLE warehouse_order ADD COLUMN IF NOT EXISTS requester_name VARCHAR(100)",
             "ALTER TABLE warehouse_order_line ADD COLUMN IF NOT EXISTS unit_price FLOAT DEFAULT 0.0",
             "ALTER TABLE warehouse_order_line ADD COLUMN IF NOT EXISTS line_total FLOAT DEFAULT 0.0",
+            # Remove legacy alias list names from DB; canonical names are Semi Trailer and Utility Trailer
+            "DELETE FROM tooling_list_item WHERE list_name = 'Semi'",
+            "DELETE FROM tooling_list_item WHERE list_name = 'Tool Trailer'",
         ]
         with db.engine.connect() as conn:
             for sql in migrations:

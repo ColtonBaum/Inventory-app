@@ -512,12 +512,10 @@ utility_trailer_list = [
 
 # Build the mapping to lists (raw)
 tooling_lists = {
-    "Standard Trailer":  standard_trailer_tools,
-    "Semi":              semi_trailer_list,
-    "Semi Trailer":      semi_trailer_list,    # alias
-    "Gang Box":          gang_box_list,
-    "Utility Trailer":   utility_trailer_list,
-    "Tool Trailer":      utility_trailer_list  # legacy alias
+    "Standard Trailer": standard_trailer_tools,
+    "Semi Trailer":     semi_trailer_list,
+    "Gang Box":         gang_box_list,
+    "Utility Trailer":  utility_trailer_list,
 }
 
 # Normalize once at import so everyone gets clean integer quantities
