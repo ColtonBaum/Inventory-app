@@ -248,16 +248,28 @@ def new_order():
         trailer_id_raw = request.form.get('trailer_id') or None
         trailer_id = int(trailer_id_raw) if trailer_id_raw else None
         notes = (request.form.get('notes') or '').strip()
-        order = WarehouseOrder(trailer_id=trailer_id, status='Pending', notes=notes)
-        db.session.add(order)
-        db.session.flush()  # get order.id
+        requester_name = (request.form.get('requester_name') or '').strip()
+        order_type = request.form.get('order_type', 'SALE').upper()
+        if order_type not in ('SALE', 'PURCHASE'):
+            order_type = 'SALE'
 
-        item_numbers = request.form.getlist('item_number')
+        order = WarehouseOrder(
+            trailer_id=trailer_id,
+            requester_name=requester_name,
+            order_type=order_type,
+            status='Pending',
+            billed=False,
+            notes=notes,
+        )
+        db.session.add(order)
+        db.session.flush()
+
         item_names = request.form.getlist('item_name')
         quantities = request.form.getlist('quantity')
-        for num, name, qty_raw in zip(item_numbers, item_names, quantities):
-            num = num.strip()
-            if not num:
+        any_added = False
+        for name, qty_raw in zip(item_names, quantities):
+            name = name.strip()
+            if not name:
                 continue
             try:
                 qty = int(qty_raw or 0)
@@ -265,15 +277,21 @@ def new_order():
                 qty = 0
             if qty <= 0:
                 continue
-            line = WarehouseOrderLine(order_id=order.id, item_number=num, item_name=name.strip(), quantity=qty)
-            db.session.add(line)
+            db.session.add(WarehouseOrderLine(order_id=order.id, item_name=name, quantity=qty))
+            any_added = True
+
+        if not any_added:
+            db.session.rollback()
+            flash('Please add at least one item with a quantity.', 'danger')
+            trailers = Trailer.query.order_by(Trailer.id.desc()).all()
+            return render_template('billing_order_new.html', trailers=trailers)
+
         db.session.commit()
         flash('Order created.', 'success')
         return redirect(url_for('billing.view_order', order_id=order.id))
 
     trailers = Trailer.query.order_by(Trailer.id.desc()).all()
-    products = WarehouseProduct.query.order_by(WarehouseProduct.item_name).all()
-    return render_template('billing_order_new.html', trailers=trailers, products=products)
+    return render_template('billing_order_new.html', trailers=trailers)
 
 
 @billing_bp.route('/warehouse/orders/<int:order_id>')

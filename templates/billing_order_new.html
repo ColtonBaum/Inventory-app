@@ -14,62 +14,94 @@
   <a class="btn ghost small" href="{{ url_for('billing.logout') }}" style="margin-bottom:6px;">Log Out</a>
 </div>
 
-<div class="card" style="max-width:800px;margin:0 auto;">
+<div class="card" style="max-width:720px;margin:0 auto;">
   <div class="card-header">
     <h2 style="margin:0;font-size:20px;">New Warehouse Order</h2>
     <a class="btn ghost small" href="{{ url_for('billing.warehouse_orders') }}">Back</a>
   </div>
   <div class="card-body">
-    <form method="POST" id="order-form">
-      <div class="grid two" style="gap:14px;margin-bottom:20px;">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div style="margin-bottom:14px;padding:10px 14px;border-radius:8px;font-size:14px;
+                    background:{% if cat=='danger' %}#fee2e2{% elif cat=='success' %}#dcfce7{% else %}#fef3c7{% endif %};
+                    color:{% if cat=='danger' %}#991b1b{% elif cat=='success' %}#166534{% else %}#92400e{% endif %};">
+          {{ msg }}
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="POST" id="order-form" style="display:grid;gap:16px;">
+
+      <!-- Order type -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div onclick="document.getElementById('type_sale').checked=true;setType('SALE')"
+             id="card_sale"
+             style="border:2px solid var(--accent);border-radius:10px;padding:14px 16px;cursor:pointer;background:var(--accent-faint,#eff6ff);">
+          <div style="font-size:15px;font-weight:700;">📦 Sale / Issue</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Items going OUT — distributing to a job or customer</div>
+          <input type="radio" name="order_type" id="type_sale" value="SALE" checked style="display:none;">
+        </div>
+        <div onclick="document.getElementById('type_purchase').checked=true;setType('PURCHASE')"
+             id="card_purchase"
+             style="border:2px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;">
+          <div style="font-size:15px;font-weight:700;">🛒 Purchase / Receive</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Items coming IN — receiving stock from a supplier</div>
+          <input type="radio" name="order_type" id="type_purchase" value="PURCHASE" style="display:none;">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="field">
-          <label>Linked Trailer (optional)</label>
-          <select name="trailer_id">
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Requested By</label>
+          <input type="text" name="requester_name" placeholder="e.g. John Smith" style="width:100%;box-sizing:border-box;">
+        </div>
+        <div class="field">
+          <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Linked Trailer (optional)</label>
+          <select name="trailer_id" style="width:100%;box-sizing:border-box;">
             <option value="">— No trailer —</option>
             {% for t in trailers %}
             <option value="{{ t.id }}">{{ t.job_name or ('Trailer #' ~ t.id) }} {% if t.job_number %}({{ t.job_number }}){% endif %}</option>
             {% endfor %}
           </select>
         </div>
-        <div class="field">
-          <label>Notes</label>
-          <input type="text" name="notes" placeholder="Optional order notes">
-        </div>
       </div>
 
-      <div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:12px;">Order Lines</div>
-
-      <div id="lines-container">
-        <div class="order-line" style="display:grid;grid-template-columns:160px 1fr 100px 40px;gap:10px;align-items:end;margin-bottom:10px;">
-          <div class="field">
-            <label>Item Number</label>
-            <input type="text" name="item_number" placeholder="e.g. T-001" list="product-list">
-          </div>
-          <div class="field">
-            <label>Item Name</label>
-            <input type="text" name="item_name" placeholder="Description">
-          </div>
-          <div class="field">
-            <label>Quantity</label>
-            <input type="number" name="quantity" value="1" min="1">
-          </div>
-          <div style="padding-bottom:2px;">
-            <button type="button" onclick="removeLine(this)" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px;">✕</button>
-          </div>
-        </div>
+      <div class="field">
+        <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">Notes (optional)</label>
+        <textarea name="notes" rows="2" placeholder="Any special instructions…" style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
       </div>
 
-      <button type="button" onclick="addLine()" class="btn ghost small" style="margin-bottom:20px;">+ Add Line</button>
+      <div>
+        <label style="font-size:13px;font-weight:700;display:block;margin-bottom:10px;">Items</label>
+        <table style="width:100%;border-collapse:collapse;" id="lineTable">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px 8px;font-size:12px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);">Description</th>
+              <th style="text-align:center;padding:6px 8px;font-size:12px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);width:110px;">Qty</th>
+              <th style="width:40px;border-bottom:1px solid var(--border);"></th>
+            </tr>
+          </thead>
+          <tbody id="lineBody">
+            <tr class="line-row">
+              <td style="padding:4px 4px 4px 0;">
+                <input type="text" name="item_name" placeholder="Item description…" style="width:100%;box-sizing:border-box;" required>
+              </td>
+              <td style="padding:4px;">
+                <input type="number" name="quantity" min="1" value="1" style="width:100%;box-sizing:border-box;text-align:center;">
+              </td>
+              <td style="padding:4px;text-align:center;">
+                <button type="button" onclick="removeLine(this)" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;">×</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <button type="button" onclick="addLine()" class="btn ghost small" style="margin-top:8px;">+ Add Item</button>
+      </div>
 
-      <datalist id="product-list">
-        {% for p in products %}
-        <option value="{{ p.item_number }}" label="{{ p.item_name or '' }}">
-        {% endfor %}
-      </datalist>
-
-      <div style="display:flex;gap:10px;">
-        <button class="btn success" type="submit">Create Order</button>
+      <div style="display:flex;gap:10px;justify-content:flex-end;padding-top:4px;">
         <a class="btn ghost" href="{{ url_for('billing.warehouse_orders') }}">Cancel</a>
+        <button class="btn primary" type="submit">Create Order</button>
       </div>
     </form>
   </div>
@@ -78,36 +110,38 @@
 {% block scripts %}
 {{ super() }}
 <script>
+function setType(t) {
+  const sale = document.getElementById('card_sale');
+  const pur  = document.getElementById('card_purchase');
+  const accent = 'var(--accent)';
+  const border = 'var(--border)';
+  if (t === 'SALE') {
+    sale.style.borderColor = accent; sale.style.background = 'var(--accent-faint,#eff6ff)';
+    pur.style.borderColor  = border; pur.style.background  = '';
+  } else {
+    pur.style.borderColor  = accent; pur.style.background  = 'var(--accent-faint,#eff6ff)';
+    sale.style.borderColor = border; sale.style.background = '';
+  }
+}
 function addLine() {
-  const container = document.getElementById('lines-container');
-  const div = document.createElement('div');
-  div.className = 'order-line';
-  div.style.cssText = 'display:grid;grid-template-columns:160px 1fr 100px 40px;gap:10px;align-items:end;margin-bottom:10px;';
-  div.innerHTML = `
-    <div class="field">
-      <label>Item Number</label>
-      <input type="text" name="item_number" placeholder="e.g. T-001" list="product-list">
-    </div>
-    <div class="field">
-      <label>Item Name</label>
-      <input type="text" name="item_name" placeholder="Description">
-    </div>
-    <div class="field">
-      <label>Quantity</label>
-      <input type="number" name="quantity" value="1" min="1">
-    </div>
-    <div style="padding-bottom:2px;">
-      <button type="button" onclick="removeLine(this)" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;padding:8px 12px;cursor:pointer;font-size:16px;">✕</button>
-    </div>
-  `;
-  container.appendChild(div);
+  const row = document.createElement('tr');
+  row.className = 'line-row';
+  row.innerHTML = `
+    <td style="padding:4px 4px 4px 0;">
+      <input type="text" name="item_name" placeholder="Item description…" style="width:100%;box-sizing:border-box;">
+    </td>
+    <td style="padding:4px;">
+      <input type="number" name="quantity" min="1" value="1" style="width:100%;box-sizing:border-box;text-align:center;">
+    </td>
+    <td style="padding:4px;text-align:center;">
+      <button type="button" onclick="removeLine(this)" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;line-height:1;">×</button>
+    </td>`;
+  document.getElementById('lineBody').appendChild(row);
+  row.querySelector('input[name="item_name"]').focus();
 }
 function removeLine(btn) {
-  const line = btn.closest('.order-line');
-  const container = document.getElementById('lines-container');
-  if (container.querySelectorAll('.order-line').length > 1) {
-    line.remove();
-  }
+  const rows = document.querySelectorAll('.line-row');
+  if (rows.length > 1) btn.closest('tr').remove();
 }
 </script>
 {% endblock %}
