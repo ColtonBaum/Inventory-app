@@ -46,8 +46,14 @@ def init_db(app):
             # Remove legacy alias list names from DB; canonical names are Semi Trailer and Utility Trailer
             "DELETE FROM tooling_list_item WHERE list_name = 'Semi'",
             "DELETE FROM tooling_list_item WHERE list_name = 'Tool Trailer'",
-            # Fix welding lead quantity — DB was seeded with wrong value (50), correct is 10
-            "UPDATE tooling_list_item SET quantity = 10 WHERE item_number = 'W WLDNG LD 50FT' AND quantity = 50",
+            # Fix welding lead quantity — correct is 10 for any list that has it wrong (50)
+            "UPDATE tooling_list_item SET quantity = 10 WHERE UPPER(item_number) = 'W WLDNG LD 50FT' AND quantity = 50",
+            # Dedup warehouse_product — keep highest id per uppercase item_number
+            """DELETE FROM warehouse_product WHERE id NOT IN (
+                SELECT MAX(id) FROM warehouse_product GROUP BY UPPER(item_number)
+            )""",
+            # Normalize all warehouse_product item_numbers to uppercase
+            "UPDATE warehouse_product SET item_number = UPPER(item_number)",
         ]
         with db.engine.connect() as conn:
             for sql in migrations:

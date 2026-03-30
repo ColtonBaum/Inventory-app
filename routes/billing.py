@@ -115,9 +115,9 @@ def generate_billing_invoice(trailer_id):
     from models import Invoice as _Invoice
     trailer = Trailer.query.get_or_404(trailer_id)
     invoice = _Invoice.query.filter_by(trailer_id=trailer_id).order_by(_Invoice.id.desc()).first()
+    is_billed = bool(invoice and invoice.billed)
 
-    # Use frozen snapshot if invoice has been marked billed
-    if invoice and invoice.billed and invoice.line_items_json:
+    if is_billed and invoice.line_items_json:
         line_items = _json.loads(invoice.line_items_json)
         total = sum(li['line_total'] for li in line_items)
     else:
@@ -128,8 +128,43 @@ def generate_billing_invoice(trailer_id):
         trailer=trailer,
         line_items=line_items,
         total=total,
+        is_billed=is_billed,
         now=datetime.now,
     )
+
+
+@billing_bp.route('/invoice/<int:trailer_id>/confirm', methods=['POST'])
+@billing_required
+def confirm_invoice(trailer_id):
+    import json as _json
+    from models import Invoice as _Invoice
+    trailer = Trailer.query.get_or_404(trailer_id)
+
+    included_nums = set(request.form.getlist('include_item'))
+
+    # Recompute from live data, filter to only confirmed items
+    all_items, _ = _compute_line_items(trailer)
+    line_items = [item for item in all_items if item['item_number'] in included_nums]
+    total = sum(item['line_total'] for item in line_items)
+
+    # Adjust warehouse stock
+    product_map = {p.item_number.upper(): p for p in WarehouseProduct.query.all()}
+    for item in line_items:
+        wp = product_map.get(item['item_number'].upper())
+        if wp:
+            wp.quantity_on_hand = max(0, wp.quantity_on_hand - item['billable_qty'])
+
+    # Find or create invoice record, mark billed, snapshot line items
+    invoice = _Invoice.query.filter_by(trailer_id=trailer_id).order_by(_Invoice.id.desc()).first()
+    if not invoice:
+        invoice = _Invoice(trailer_id=trailer_id)
+        db.session.add(invoice)
+    invoice.billed = True
+    invoice.line_items_json = _json.dumps(line_items)
+
+    db.session.commit()
+    flash('Invoice confirmed and billed. Warehouse stock updated.', 'success')
+    return redirect(url_for('inventory.view_invoices'))
 
 
 # ---------- Warehouse Stock ----------
@@ -588,8 +623,8 @@ def import_warehouse():
                     else:
                         continue
                     _, purchase_price, sales_price = best
-                    # Use sales_price for billing invoices; fall back to purchase_price
-                    price_from_sheet[item_id] = sales_price if sales_price else purchase_price
+                    # Store purchase_price in unit_cost — billing already adds 10% markup
+                    price_from_sheet[item_id] = purchase_price if purchase_price else sales_price
                 break  # only process first matching sheet
 
         # Pre-load existing records with UPPERCASE keys for case-insensitive matching
