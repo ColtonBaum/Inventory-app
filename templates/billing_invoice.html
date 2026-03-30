@@ -28,12 +28,14 @@
 
 <style>
 .inv { max-width:960px; margin:0 auto; background:#fff; border:1px solid #d0d0d0; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; color:#111; }
-.inv-head { padding:28px 36px 24px; border-bottom:3px solid #111; display:flex; justify-content:space-between; align-items:flex-start; }
-.inv-company { font-size:22px; font-weight:800; letter-spacing:-.3px; text-transform:uppercase; }
-.inv-sub { font-size:11px; color:#666; margin-top:2px; letter-spacing:.5px; text-transform:uppercase; }
-.inv-title { font-size:32px; font-weight:900; letter-spacing:2px; text-transform:uppercase; }
-.inv-meta { font-size:11px; color:#555; margin-top:6px; line-height:1.7; }
-.inv-details { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid #d0d0d0; }
+.inv-head { padding:24px 36px; border-bottom:3px solid #111; display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.inv-head-brand { display:flex; flex-direction:column; align-items:center; text-align:center; }
+.inv-head-brand img { height:64px; width:auto; margin-bottom:8px; }
+.inv-company { font-size:18px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; }
+.inv-sub { font-size:10px; color:#666; margin-top:2px; letter-spacing:.8px; text-transform:uppercase; }
+.inv-title { font-size:32px; font-weight:900; letter-spacing:3px; text-transform:uppercase; text-align:right; }
+.inv-meta { font-size:11px; color:#555; margin-top:6px; line-height:1.8; text-align:right; }
+.inv-details { display:grid; grid-template-columns:repeat(5,1fr); border-bottom:1px solid #d0d0d0; }
 .inv-detail-cell { padding:14px 20px; border-right:1px solid #e8e8e8; }
 .inv-detail-cell:last-child { border-right:none; }
 .inv-detail-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:#888; margin-bottom:4px; }
@@ -57,7 +59,9 @@
 }
 @media (max-width:680px) {
   .inv-details { grid-template-columns:1fr 1fr; }
-  .inv-head { flex-direction:column; gap:12px; }
+  .inv-head { flex-direction:column; align-items:flex-start; gap:12px; }
+  .inv-head-brand { align-items:flex-start; text-align:left; }
+  .inv-title, .inv-meta { text-align:left; }
 }
 </style>
 
@@ -67,15 +71,17 @@
 
 <div class="inv">
   <div class="inv-head">
-    <div>
+    <div class="inv-head-brand">
+      <img src="{{ url_for('static', filename='img/mwi_logo.png') }}" alt="MWI Logo">
       <div class="inv-company">Mountain West Industrial</div>
       <div class="inv-sub">Warehouse Pull Invoice</div>
     </div>
-    <div style="text-align:right;">
+    <div>
       <div class="inv-title">Invoice</div>
       <div class="inv-meta">
         Date: {{ now().strftime('%m/%d/%Y') }}<br>
-        Trailer #{{ trailer.id }}
+        {% if trailer.trailer_id %}Trailer: {{ trailer.trailer_id }}<br>{% endif %}
+        Ref #{{ trailer.id }}
       </div>
     </div>
   </div>
@@ -96,6 +102,10 @@
     <div class="inv-detail-cell">
       <div class="inv-detail-label">Assigned To</div>
       <div class="inv-detail-value">{{ trailer.assigned_user or '—' }}</div>
+    </div>
+    <div class="inv-detail-cell">
+      <div class="inv-detail-label">Trailer #</div>
+      <div class="inv-detail-value">{{ trailer.trailer_id or '—' }}</div>
     </div>
   </div>
 
