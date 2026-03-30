@@ -62,6 +62,7 @@ def _compute_line_items(trailer):
         expected_map[num] = {
             'item_name': item.get('Item Name', ''),
             'quantity': int(item.get('Quantity', 0)) if str(item.get('Quantity', 0)).isdigit() else 0,
+            'category': (item.get('Category') or 'General').strip(),
         }
 
     response_map = defaultdict(lambda: {'missing': 0, 'redtag': 0, 'note': ''})
@@ -95,6 +96,8 @@ def _compute_line_items(trailer):
         line_items.append({
             'item_number': num,
             'item_name': info['item_name'],
+            'category': info.get('category', 'General'),
+            'expected_qty': info['quantity'],
             'missing_qty': missing_qty,
             'redtag_qty': redtag_qty,
             'billable_qty': billable_qty,
@@ -103,7 +106,7 @@ def _compute_line_items(trailer):
             'note': resp.get('note', ''),
         })
 
-    line_items.sort(key=lambda x: (x['item_name'] or '').lower())
+    line_items.sort(key=lambda x: (x.get('category', 'General').lower(), (x['item_name'] or '').lower()))
     return line_items, total
 
 

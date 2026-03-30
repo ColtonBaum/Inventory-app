@@ -28,15 +28,12 @@
 
 <style>
 .inv { max-width:960px; margin:0 auto; background:#fff; border:1px solid #d0d0d0; font-family:'Helvetica Neue',Helvetica,Arial,sans-serif; color:#111; }
-.inv-head { padding:24px 36px; border-bottom:3px solid #111; display:flex; justify-content:space-between; align-items:center; gap:16px; }
-.inv-head-brand { display:flex; flex-direction:column; align-items:center; text-align:center; }
-.inv-head-brand img { height:64px; width:auto; margin-bottom:8px; }
-.inv-company { font-size:18px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; }
-.inv-sub { font-size:10px; color:#666; margin-top:2px; letter-spacing:.8px; text-transform:uppercase; }
+.inv-head { padding:24px 36px; border-bottom:3px solid #111; display:flex; justify-content:space-between; align-items:center; }
+.inv-company { font-size:20px; font-weight:900; letter-spacing:.5px; text-transform:uppercase; }
 .inv-title { font-size:32px; font-weight:900; letter-spacing:3px; text-transform:uppercase; text-align:right; }
 .inv-meta { font-size:11px; color:#555; margin-top:6px; line-height:1.8; text-align:right; }
 .inv-details { display:grid; grid-template-columns:repeat(5,1fr); border-bottom:1px solid #d0d0d0; }
-.inv-detail-cell { padding:14px 20px; border-right:1px solid #e8e8e8; }
+.inv-detail-cell { padding:12px 20px; border-right:1px solid #e8e8e8; }
 .inv-detail-cell:last-child { border-right:none; }
 .inv-detail-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:#888; margin-bottom:4px; }
 .inv-detail-value { font-size:13px; font-weight:600; }
@@ -45,9 +42,10 @@
 .inv thead th { padding:10px 14px; font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; color:#333; white-space:nowrap; }
 .inv tbody tr { border-bottom:1px solid #e8e8e8; }
 .inv tbody tr:last-child { border-bottom:none; }
-.inv tbody td { padding:9px 14px; vertical-align:middle; }
+.inv tbody td { padding:8px 14px; vertical-align:middle; }
 .inv tfoot tr { border-top:2px solid #111; }
 .inv tfoot td { padding:12px 14px; }
+.inv-cat-row td { background:#f5f5f5; padding:6px 14px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:#666; border-bottom:1px solid #e0e0e0; border-top:1px solid #e0e0e0; }
 .inv-remove-btn { background:none; border:none; color:#ccc; font-size:18px; cursor:pointer; padding:0 4px; line-height:1; }
 .inv-remove-btn:hover { color:#dc2626; }
 @media print {
@@ -55,12 +53,10 @@
   .inv-remove-btn { display:none !important; }
   body { background:#fff; margin:0; }
   .inv { border:none; max-width:100%; }
-  .inv-head { padding:20px 24px 16px; }
 }
-@media (max-width:680px) {
+@media (max-width:700px) {
   .inv-details { grid-template-columns:1fr 1fr; }
-  .inv-head { flex-direction:column; align-items:flex-start; gap:12px; }
-  .inv-head-brand { align-items:flex-start; text-align:left; }
+  .inv-head { flex-direction:column; align-items:flex-start; gap:10px; }
   .inv-title, .inv-meta { text-align:left; }
 }
 </style>
@@ -70,12 +66,10 @@
 {% endif %}
 
 <div class="inv">
+
+  <!-- Header -->
   <div class="inv-head">
-    <div class="inv-head-brand">
-      <img src="{{ url_for('static', filename='img/mwi_logo.png') }}" alt="MWI Logo">
-      <div class="inv-company">Mountain West Industrial</div>
-      <div class="inv-sub">Warehouse Pull Invoice</div>
-    </div>
+    <div class="inv-company">Mountain West Industrial</div>
     <div>
       <div class="inv-title">Invoice</div>
       <div class="inv-meta">
@@ -86,6 +80,7 @@
     </div>
   </div>
 
+  <!-- Job details -->
   <div class="inv-details">
     <div class="inv-detail-cell">
       <div class="inv-detail-label">Job Name</div>
@@ -109,48 +104,62 @@
     </div>
   </div>
 
+  <!-- Line items -->
+  {% set col_count = 9 if not is_billed else 8 %}
   <table>
     <thead>
       <tr>
-        {% if not is_billed %}<th style="width:32px;"></th>{% endif %}
+        {% if not is_billed %}<th style="width:28px;"></th>{% endif %}
         <th style="text-align:left;">Item Name</th>
         <th style="text-align:left;">Item #</th>
+        <th style="text-align:center;">Expected</th>
         <th style="text-align:center;">Missing</th>
         <th style="text-align:center;">Red Tag</th>
-        <th style="text-align:center;">Billable Qty</th>
+        <th style="text-align:center;">Billable</th>
         <th style="text-align:right;">Unit Price</th>
         <th style="text-align:right;">Line Total</th>
       </tr>
     </thead>
     <tbody id="lineBody">
-      {% for item in line_items %}
-      <tr data-num="{{ item.item_number }}">
-        {% if not is_billed %}
-        <td style="padding:6px 4px 6px 14px;">
-          <input type="hidden" name="include_item" value="{{ item.item_number }}">
-          <button type="button" class="inv-remove-btn" onclick="removeLine(this)" title="Remove from invoice">×</button>
-        </td>
-        {% endif %}
-        <td style="font-weight:600;">{{ item.item_name }}</td>
-        <td style="font-family:monospace;font-size:11px;color:#555;">{{ item.item_number }}</td>
-        <td style="text-align:center;font-weight:600;">{{ item.missing_qty if item.missing_qty else '—' }}</td>
-        <td style="text-align:center;font-weight:600;">{{ item.redtag_qty if item.redtag_qty else '—' }}</td>
-        <td style="text-align:center;font-weight:700;" class="billable-qty">{{ item.billable_qty }}</td>
-        <td style="text-align:right;color:#444;">${{ '%.2f' | format(item.unit_price) }}</td>
-        <td style="text-align:right;font-weight:700;" class="line-total">${{ '%.2f' | format(item.line_total) }}</td>
-      </tr>
+      {% if line_items %}
+        {% set ns = namespace(current_cat='') %}
+        {% for item in line_items %}
+          {% set cat = item.category or 'General' %}
+          {% if cat != ns.current_cat %}
+            {% set ns.current_cat = cat %}
+            <tr class="inv-cat-row">
+              <td colspan="{{ col_count }}">{{ cat | replace('_', ' ') | title }}</td>
+            </tr>
+          {% endif %}
+          <tr data-num="{{ item.item_number }}">
+            {% if not is_billed %}
+            <td style="padding:6px 4px 6px 14px;">
+              <input type="hidden" name="include_item" value="{{ item.item_number }}">
+              <button type="button" class="inv-remove-btn" onclick="removeLine(this)" title="Remove">×</button>
+            </td>
+            {% endif %}
+            <td style="font-weight:600;">{{ item.item_name }}</td>
+            <td style="font-family:monospace;font-size:11px;color:#555;">{{ item.item_number }}</td>
+            <td style="text-align:center;color:#888;">{{ item.expected_qty if item.expected_qty else '—' }}</td>
+            <td style="text-align:center;font-weight:600;">{{ item.missing_qty if item.missing_qty else '—' }}</td>
+            <td style="text-align:center;font-weight:600;">{{ item.redtag_qty if item.redtag_qty else '—' }}</td>
+            <td style="text-align:center;font-weight:700;" class="billable-qty">{{ item.billable_qty }}</td>
+            <td style="text-align:right;color:#444;">${{ '%.2f' | format(item.unit_price) }}</td>
+            <td style="text-align:right;font-weight:700;" class="line-total">${{ '%.2f' | format(item.line_total) }}</td>
+          </tr>
+        {% endfor %}
       {% else %}
-      <tr>
-        <td colspan="{{ 9 if not is_billed else 8 }}" style="text-align:center;padding:40px;color:#aaa;font-size:13px;">
-          No billable items — all items marked Complete.
-        </td>
-      </tr>
-      {% endfor %}
+        <tr>
+          <td colspan="{{ col_count }}" style="text-align:center;padding:40px;color:#aaa;font-size:13px;">
+            No billable items — all items marked Complete.
+          </td>
+        </tr>
+      {% endif %}
     </tbody>
     {% if line_items %}
     <tfoot>
       <tr>
-        <td colspan="{{ 6 if not is_billed else 5 }}"></td>
+        <td colspan="{{ col_count - 2 }}"></td>
         <td style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#555;">Grand Total</td>
         <td style="text-align:right;font-size:18px;font-weight:900;" id="grandTotal">${{ '%.2f' | format(total) }}</td>
       </tr>
@@ -158,14 +167,14 @@
     {% endif %}
   </table>
 
-  <div style="border-top:1px solid #d0d0d0;padding:12px 20px;display:flex;justify-content:space-between;">
+  <div style="border-top:1px solid #d0d0d0;padding:10px 20px;display:flex;justify-content:space-between;">
     <span style="font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:.5px;">Mountain West Industrial</span>
     <span style="font-size:10px;color:#aaa;">Generated {{ now().strftime('%m/%d/%Y') }}</span>
   </div>
+
 </div>
 
 {% if not is_billed %}
-<!-- Confirm button outside invoice doc so it doesn't print -->
 <div class="no-print" style="max-width:960px;margin:16px auto 0;display:flex;justify-content:flex-end;gap:10px;">
   <a class="btn ghost" href="{{ url_for('billing.billing_dashboard') }}">Cancel</a>
   <button type="submit" class="btn primary" onclick="return confirm('Confirm invoice? This will deduct quantities from warehouse stock and mark the invoice as billed.')">
@@ -177,14 +186,12 @@
 
 <script>
 function removeLine(btn) {
-  const row = btn.closest('tr');
-  row.remove();
+  btn.closest('tr').remove();
   recalcTotal();
 }
-
 function recalcTotal() {
   let total = 0;
-  document.querySelectorAll('#lineBody tr').forEach(row => {
+  document.querySelectorAll('#lineBody tr:not(.inv-cat-row)').forEach(row => {
     const cell = row.querySelector('.line-total');
     if (cell) total += parseFloat(cell.textContent.replace('$','').replace(',','')) || 0;
   });
