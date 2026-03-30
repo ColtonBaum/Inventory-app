@@ -107,10 +107,7 @@
     <tbody>
       {% for item in line_items %}
       <tr>
-        <td>
-          <span style="font-weight:600;">{{ item.item_name }}</span>
-          {% if item.note %}<div class="inv-note">{{ item.note }}</div>{% endif %}
-        </td>
+        <td style="font-weight:600;">{{ item.item_name }}</td>
         <td style="font-family:monospace;font-size:11px;color:#555;">{{ item.item_number }}</td>
         <td style="text-align:center;font-weight:600;">{{ item.missing_qty if item.missing_qty else '—' }}</td>
         <td style="text-align:center;font-weight:600;">{{ item.redtag_qty if item.redtag_qty else '—' }}</td>

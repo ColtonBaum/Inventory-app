@@ -103,39 +103,6 @@ def _compute_line_items(trailer):
             'note': resp.get('note', ''),
         })
 
-    # Extra tooling
-    extra_map = defaultdict(lambda: {'missing': 0, 'redtag': 0, 'item_name': '', 'note': ''})
-    for r in responses:
-        if (r.category or '').strip().lower() == 'extra tooling':
-            key = r.item_number
-            extra_map[key]['item_name'] = r.item_name
-            if r.status == 'Missing':
-                extra_map[key]['missing'] += (r.quantity or 0)
-                if r.note:
-                    extra_map[key]['note'] = r.note
-            elif r.status == 'Red Tag':
-                extra_map[key]['redtag'] += (r.quantity or 0)
-                if r.note:
-                    extra_map[key]['note'] = r.note
-
-    for num, info in extra_map.items():
-        billable_qty = info['missing'] + info['redtag']
-        if billable_qty <= 0:
-            continue
-        unit_price = price_map.get(num, 0.0)
-        line_total = unit_price * billable_qty
-        total += line_total
-        line_items.append({
-            'item_number': num,
-            'item_name': info['item_name'],
-            'missing_qty': info['missing'],
-            'redtag_qty': info['redtag'],
-            'billable_qty': billable_qty,
-            'unit_price': unit_price,
-            'line_total': line_total,
-            'note': info.get('note', ''),
-        })
-
     line_items.sort(key=lambda x: (x['item_name'] or '').lower())
     return line_items, total
 
