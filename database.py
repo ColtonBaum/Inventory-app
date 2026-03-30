@@ -46,6 +46,8 @@ def init_db(app):
             # Remove legacy alias list names from DB; canonical names are Semi Trailer and Utility Trailer
             "DELETE FROM tooling_list_item WHERE list_name = 'Semi'",
             "DELETE FROM tooling_list_item WHERE list_name = 'Tool Trailer'",
+            # Fix welding lead quantity — DB was seeded with wrong value (50), correct is 10
+            "UPDATE tooling_list_item SET quantity = 10 WHERE item_number = 'W WLDNG LD 50FT' AND quantity = 50",
         ]
         with db.engine.connect() as conn:
             for sql in migrations:
