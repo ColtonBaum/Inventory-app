@@ -69,7 +69,7 @@
 
   <!-- Header -->
   <div class="inv-head">
-    <div class="inv-company">Mountain West Industrial</div>
+    <img src="{{ url_for('static', filename='img/mwi_logo.png') }}" alt="Mountain West Industrial" style="height:64px;max-width:220px;object-fit:contain;" onerror="this.style.display='none'">
     <div>
       <div class="inv-title">Invoice</div>
       <div class="inv-meta">
@@ -105,11 +105,12 @@
   </div>
 
   <!-- Line items -->
-  {% set col_count = 9 if not is_billed else 8 %}
+  {% set col_count = 10 if not is_billed else 9 %}
   <table>
     <thead>
       <tr>
         {% if not is_billed %}<th style="width:28px;"></th>{% endif %}
+        <th style="text-align:center;width:28px;">#</th>
         <th style="text-align:left;">Item Name</th>
         <th style="text-align:left;">Item #</th>
         <th style="text-align:center;">Expected</th>
@@ -122,7 +123,7 @@
     </thead>
     <tbody id="lineBody">
       {% if line_items %}
-        {% set ns = namespace(current_cat='') %}
+        {% set ns = namespace(current_cat='', row_num=0) %}
         {% for item in line_items %}
           {% set cat = item.category or 'General' %}
           {% if cat != ns.current_cat %}
@@ -131,6 +132,7 @@
               <td colspan="{{ col_count }}">{{ cat | replace('_', ' ') | title }}</td>
             </tr>
           {% endif %}
+          {% set ns.row_num = ns.row_num + 1 %}
           <tr data-num="{{ item.item_number }}">
             {% if not is_billed %}
             <td style="padding:6px 4px 6px 14px;">
@@ -138,6 +140,7 @@
               <button type="button" class="inv-remove-btn" onclick="removeLine(this)" title="Remove">×</button>
             </td>
             {% endif %}
+            <td style="text-align:center;color:#888;font-size:11px;font-weight:600;">{{ ns.row_num }}</td>
             <td style="font-weight:600;">{{ item.item_name }}</td>
             <td style="font-family:monospace;font-size:11px;color:#555;">{{ item.item_number }}</td>
             <td style="text-align:center;color:#888;">{{ item.expected_qty if item.expected_qty else '—' }}</td>

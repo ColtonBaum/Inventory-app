@@ -11,7 +11,6 @@
   <a href="{{ url_for('billing.metrics') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Metrics</a>
   <a href="{{ url_for('billing.tooling_lists_index') }}" style="padding:10px 18px;font-weight:600;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--muted);text-decoration:none;">Tooling Lists</a>
   <div style="flex:1;"></div>
-
 </div>
 
 {% if low_stock %}
@@ -62,46 +61,78 @@
   </div>
 
   <div class="card-body" style="padding:0;">
+
+    {% macro product_rows(items) %}
+      {% for p in items %}
+      <tr style="{{ 'background:#fffbeb;' if p.quantity_on_hand <= p.reorder_point else '' }}">
+        <td style="color:var(--muted);font-size:13px;">{{ p.item_number }}</td>
+        <td style="font-weight:600;">{{ p.item_name or '—' }}</td>
+        <td style="text-align:center;font-weight:700;font-size:15px;">{{ p.quantity_on_hand }}</td>
+        <td style="text-align:center;color:var(--muted);">{{ p.reorder_point }}</td>
+        <td style="text-align:right;">${{ '%.2f' | format(p.unit_cost) }}</td>
+        <td style="text-align:right;color:#166534;font-weight:600;">${{ '%.2f' | format(p.unit_cost * 1.10) }}</td>
+        <td>
+          {% if p.quantity_on_hand <= p.reorder_point %}
+            <span class="chip amber">Low Stock</span>
+          {% else %}
+            <span class="chip green">OK</span>
+          {% endif %}
+        </td>
+        <td style="white-space:nowrap;">
+          <a class="btn ghost small" href="{{ url_for('billing.edit_product', product_id=p.id) }}">Edit</a>
+          <form method="POST" action="{{ url_for('billing.delete_product', product_id=p.id) }}" style="display:inline;" onsubmit="return confirm('Remove {{ p.item_number }}?')">
+            <button type="submit" class="btn small" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;padding:4px 8px;">✕</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    {% endmacro %}
+
+    {% set thead %}
+    <thead>
+      <tr>
+        <th>Item #</th>
+        <th>Item Name</th>
+        <th style="text-align:center;">Qty on Hand</th>
+        <th style="text-align:center;">Reorder Point</th>
+        <th style="text-align:right;">Purchase Price</th>
+        <th style="text-align:right;">Sales Price</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    {% endset %}
+
+    <!-- Incomplete items first -->
+    {% if incomplete %}
+    <div style="padding:10px 20px 6px;background:#fef2f2;border-bottom:1px solid #fecaca;">
+      <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#991b1b;">⚠ Incomplete — Missing Name or Price ({{ incomplete|length }})</span>
+    </div>
     <div class="table-wrap">
       <table>
-        <thead>
-          <tr>
-            <th>Item #</th>
-            <th>Item Name</th>
-            <th style="text-align:center;">Qty on Hand</th>
-            <th style="text-align:center;">Reorder Point</th>
-            <th style="text-align:right;">Purchase Price</th>
-            <th style="text-align:right;">Sales Price</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for p in products %}
-          <tr style="{{ 'background:#fffbeb;' if p.quantity_on_hand <= p.reorder_point else '' }}">
-            <td style="color:var(--muted);font-size:13px;">{{ p.item_number }}</td>
-            <td style="font-weight:600;">{{ p.item_name or '—' }}</td>
-            <td style="text-align:center;font-weight:700;font-size:16px;">{{ p.quantity_on_hand }}</td>
-            <td style="text-align:center;color:var(--muted);">{{ p.reorder_point }}</td>
-            <td style="text-align:right;">${{ '%.2f' | format(p.unit_cost) }}</td>
-            <td style="text-align:right;color:#166534;font-weight:600;">${{ '%.2f' | format(p.unit_cost * 1.10) }}</td>
-            <td>
-              {% if p.quantity_on_hand <= p.reorder_point %}
-                <span class="chip amber">Low Stock</span>
-              {% else %}
-                <span class="chip green">OK</span>
-              {% endif %}
-            </td>
-            <td>
-              <a class="btn ghost small" href="{{ url_for('billing.edit_product', product_id=p.id) }}">Edit</a>
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--muted);">No products in warehouse. Add one above.</td></tr>
-          {% endfor %}
-        </tbody>
+        {{ thead }}
+        <tbody>{{ product_rows(incomplete) }}</tbody>
       </table>
     </div>
+    {% endif %}
+
+    <!-- Categorized items -->
+    {% if sorted_cats %}
+      {% for cat_name, cat_items in sorted_cats %}
+      <div style="padding:8px 20px 5px;background:#f1f5f9;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#475569;">{{ cat_name }} ({{ cat_items|length }})</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          {{ thead }}
+          <tbody>{{ product_rows(cat_items) }}</tbody>
+        </table>
+      </div>
+      {% endfor %}
+    {% elif not incomplete %}
+      <div style="text-align:center;padding:40px;color:var(--muted);">No products in warehouse. Add one above.</div>
+    {% endif %}
+
   </div>
 </div>
 {% endblock %}

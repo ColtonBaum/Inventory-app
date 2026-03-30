@@ -174,12 +174,35 @@ def confirm_invoice(trailer_id):
 @billing_bp.route('/warehouse')
 @billing_required
 def warehouse_inventory():
+    from models import ToolingListItem
+    from collections import defaultdict as _dd
     q = (request.args.get('q') or '').strip().lower()
     products = WarehouseProduct.query.order_by(WarehouseProduct.item_name).all()
     if q:
         products = [p for p in products if q in (p.item_name or '').lower() or q in (p.item_number or '').lower()]
     low_stock = [p for p in products if p.quantity_on_hand <= p.reorder_point]
-    return render_template('billing_inventory.html', products=products, low_stock=low_stock, q=q)
+
+    # Build category map from tooling list items (item_number -> category)
+    cat_map = {}
+    for tli in ToolingListItem.query.all():
+        num = (tli.item_number or '').strip().upper()
+        if num and num not in cat_map:
+            cat_map[num] = (tli.category or 'Other').strip().replace('_', ' ').title()
+
+    incomplete = []
+    categorized = _dd(list)
+    for p in products:
+        missing_info = not (p.item_name and p.item_name.strip()) or p.unit_cost == 0.0
+        if missing_info:
+            incomplete.append(p)
+        else:
+            cat = cat_map.get((p.item_number or '').upper(), 'Other')
+            categorized[cat].append(p)
+
+    sorted_cats = sorted(categorized.items(), key=lambda x: x[0])
+    return render_template('billing_inventory.html',
+                           sorted_cats=sorted_cats, incomplete=incomplete,
+                           low_stock=low_stock, q=q)
 
 
 @billing_bp.route('/warehouse/product/<int:product_id>/edit', methods=['GET', 'POST'])
@@ -198,6 +221,16 @@ def edit_product(product_id):
         flash('Product updated.', 'success')
         return redirect(url_for('billing.warehouse_inventory'))
     return render_template('billing_edit_product.html', product=product)
+
+
+@billing_bp.route('/warehouse/product/<int:product_id>/delete', methods=['POST'])
+@billing_required
+def delete_product(product_id):
+    product = WarehouseProduct.query.get_or_404(product_id)
+    db.session.delete(product)
+    db.session.commit()
+    flash(f'Removed {product.item_number}.', 'info')
+    return redirect(url_for('billing.warehouse_inventory'))
 
 
 @billing_bp.route('/warehouse/product/add', methods=['POST'])
