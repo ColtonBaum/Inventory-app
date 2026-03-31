@@ -80,6 +80,12 @@ def _compute_line_items(trailer):
     # Sales price = purchase cost + 10% markup (key uppercased for case-insensitive lookup)
     price_map = {p.item_number.strip().upper(): round(p.unit_cost * 1.10, 2) for p in WarehouseProduct.query.all()}
 
+    # Items entered in rolls but billed by the pound (1 roll = 33 lbs)
+    ROLL_TO_LBS = {
+        'W .045X33 CS11',  # Coreshield Eleven
+        'W .072X33 XLR8',  # XLR8 Wire
+    }
+
     line_items = []
     total = 0.0
 
@@ -90,9 +96,21 @@ def _compute_line_items(trailer):
         billable_qty = missing_qty + redtag_qty
         if billable_qty <= 0:
             continue
+
+        # Convert rolls to lbs for wire items
+        rolls = billable_qty
+        if num.strip().upper() in ROLL_TO_LBS:
+            billable_qty = billable_qty * 33
+            roll_note = f'{rolls} roll{"s" if rolls != 1 else ""} × 33 lbs'
+        else:
+            roll_note = None
+
         unit_price = price_map.get(num.strip().upper(), 0.0)
         line_total = unit_price * billable_qty
         total += line_total
+        note = resp.get('note', '')
+        if roll_note:
+            note = (roll_note + ('  ' + note if note else ''))
         line_items.append({
             'item_number': num,
             'item_name': info['item_name'],
@@ -101,9 +119,10 @@ def _compute_line_items(trailer):
             'missing_qty': missing_qty,
             'redtag_qty': redtag_qty,
             'billable_qty': billable_qty,
+            'billable_unit': 'lbs' if num.strip().upper() in ROLL_TO_LBS else None,
             'unit_price': unit_price,
             'line_total': line_total,
-            'note': resp.get('note', ''),
+            'note': note,
         })
 
     line_items.sort(key=lambda x: (x.get('category', 'General').lower(), (x['item_name'] or '').lower()))
