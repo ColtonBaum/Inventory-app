@@ -32,7 +32,7 @@
 .inv-company { font-size:20px; font-weight:900; letter-spacing:.5px; text-transform:uppercase; }
 .inv-title { font-size:32px; font-weight:900; letter-spacing:3px; text-transform:uppercase; text-align:right; }
 .inv-meta { font-size:11px; color:#555; margin-top:6px; line-height:1.8; text-align:right; }
-.inv-details { display:grid; grid-template-columns:repeat(5,1fr); border-bottom:1px solid #d0d0d0; }
+.inv-details { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid #d0d0d0; }
 .inv-detail-cell { padding:12px 20px; border-right:1px solid #e8e8e8; }
 .inv-detail-cell:last-child { border-right:none; }
 .inv-detail-label { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.8px; color:#888; margin-bottom:4px; }
@@ -69,7 +69,7 @@
 
   <!-- Header -->
   <div class="inv-head">
-    <img src="{{ url_for('static', filename='img/mwi_logo.png') }}" alt="Mountain West Industrial" style="height:64px;max-width:220px;object-fit:contain;" onerror="this.style.display='none'">
+    <img src="{{ url_for('static', filename='img/mwi_logo.png') }}" alt="Mountain West Industrial" style="height:110px;max-width:320px;object-fit:contain;" onerror="this.style.display='none'">
     <div>
       <div class="inv-title">Invoice</div>
       <div class="inv-meta">
@@ -93,10 +93,6 @@
     <div class="inv-detail-cell">
       <div class="inv-detail-label">Location</div>
       <div class="inv-detail-value">{{ trailer.location or '—' }}</div>
-    </div>
-    <div class="inv-detail-cell">
-      <div class="inv-detail-label">Assigned To</div>
-      <div class="inv-detail-value">{{ trailer.assigned_user or '—' }}</div>
     </div>
     <div class="inv-detail-cell">
       <div class="inv-detail-label">Trailer #</div>

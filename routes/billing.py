@@ -77,8 +77,8 @@ def _compute_line_items(trailer):
             if r.note:
                 response_map[key]['note'] = r.note
 
-    # Sales price = purchase cost + 10% markup
-    price_map = {p.item_number: round(p.unit_cost * 1.10, 2) for p in WarehouseProduct.query.all()}
+    # Sales price = purchase cost + 10% markup (key uppercased for case-insensitive lookup)
+    price_map = {p.item_number.strip().upper(): round(p.unit_cost * 1.10, 2) for p in WarehouseProduct.query.all()}
 
     line_items = []
     total = 0.0
@@ -90,7 +90,7 @@ def _compute_line_items(trailer):
         billable_qty = missing_qty + redtag_qty
         if billable_qty <= 0:
             continue
-        unit_price = price_map.get(num, 0.0)
+        unit_price = price_map.get(num.strip().upper(), 0.0)
         line_total = unit_price * billable_qty
         total += line_total
         line_items.append({
