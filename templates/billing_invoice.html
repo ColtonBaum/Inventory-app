@@ -51,6 +51,8 @@
 @media print {
   .no-print { display:none !important; }
   .inv-remove-btn { display:none !important; }
+  .nav-bar { display:none !important; }
+  .container { margin:0 !important; padding:0 !important; }
   body { background:#fff; margin:0; }
   .inv { border:none; max-width:100%; }
 }
@@ -155,16 +157,13 @@
         </tr>
       {% endif %}
     </tbody>
-    {% if line_items %}
-    <tfoot>
-      <tr>
-        <td colspan="{{ col_count - 2 }}"></td>
-        <td style="text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#555;">Grand Total</td>
-        <td style="text-align:right;font-size:18px;font-weight:900;" id="grandTotal">${{ '%.2f' | format(total) }}</td>
-      </tr>
-    </tfoot>
-    {% endif %}
   </table>
+  {% if line_items %}
+  <div style="border-top:2px solid #111;display:flex;justify-content:flex-end;align-items:center;gap:24px;padding:12px 14px;">
+    <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#555;">Grand Total</span>
+    <span style="font-size:18px;font-weight:900;" id="grandTotal">${{ '%.2f' | format(total) }}</span>
+  </div>
+  {% endif %}
 
   <div style="border-top:1px solid #d0d0d0;padding:10px 20px;display:flex;justify-content:space-between;">
     <span style="font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:.5px;">Mountain West Industrial</span>
