@@ -79,7 +79,9 @@
           <tr>
             <th>Description</th>
             <th style="text-align:center;">Qty</th>
-            {% if order.billed %}
+            {% if not order.billed %}
+            <th>Inventory Item</th>
+            {% else %}
             <th style="text-align:right;">Unit Price</th>
             <th style="text-align:right;">Line Total</th>
             {% endif %}
@@ -88,11 +90,29 @@
         <tbody>
           {% for line in order.lines %}
           <tr>
-            <td style="font-weight:600;">{{ line.item_name or '—' }}
-              {% if line.item_number %}<span style="font-size:12px;color:var(--muted);font-weight:400;"> — {{ line.item_number }}</span>{% endif %}
-            </td>
+            <td style="font-weight:600;">{{ line.item_name or '—' }}</td>
             <td style="text-align:center;font-weight:700;font-size:16px;">{{ line.quantity }}</td>
-            {% if order.billed %}
+            {% if not order.billed %}
+            <td>
+              {% if line.item_number %}
+                <span style="font-size:12px;font-family:monospace;background:#f1f5f9;padding:2px 7px;border-radius:5px;border:1px solid var(--border);">{{ line.item_number }}</span>
+                <form method="POST" action="{{ url_for('billing.link_order_line', order_id=order.id, line_id=line.id) }}" style="display:inline;">
+                  <input type="hidden" name="item_number" value="">
+                  <button type="submit" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0 4px;" title="Clear link">×</button>
+                </form>
+              {% else %}
+                <form method="POST" action="{{ url_for('billing.link_order_line', order_id=order.id, line_id=line.id) }}" style="display:flex;gap:6px;align-items:center;">
+                  <select name="item_number" style="font-size:12px;padding:5px 8px;flex:1;max-width:320px;" required>
+                    <option value="">— Select inventory item —</option>
+                    {% for p in products %}
+                    <option value="{{ p.item_number }}">{{ p.item_name }} ({{ p.item_number }})</option>
+                    {% endfor %}
+                  </select>
+                  <button type="submit" class="btn primary small" style="font-size:12px;padding:6px 12px;min-height:unset;">Link</button>
+                </form>
+              {% endif %}
+            </td>
+            {% else %}
             <td style="text-align:right;">${{ '%.2f'|format(line.unit_price or 0) }}</td>
             <td style="text-align:right;font-weight:600;">${{ '%.2f'|format(line.line_total or 0) }}</td>
             {% endif %}

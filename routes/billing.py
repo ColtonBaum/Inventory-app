@@ -403,7 +403,8 @@ def new_order():
 def view_order(order_id):
     order = WarehouseOrder.query.get_or_404(order_id)
     trailer = Trailer.query.get(order.trailer_id) if order.trailer_id else None
-    return render_template('billing_order_view.html', order=order, trailer=trailer)
+    products = WarehouseProduct.query.order_by(WarehouseProduct.item_name).all() if not order.billed else []
+    return render_template('billing_order_view.html', order=order, trailer=trailer, products=products)
 
 
 @billing_bp.route('/warehouse/orders/<int:order_id>/status', methods=['POST'])
@@ -416,6 +417,27 @@ def update_order_status(order_id):
         db.session.commit()
         flash(f'Order status updated to {new_status}.', 'success')
     return redirect(url_for('billing.view_order', order_id=order_id))
+
+
+@billing_bp.route('/warehouse/orders/<int:order_id>/lines/<int:line_id>/link', methods=['POST'])
+@billing_required
+def link_order_line(order_id, line_id):
+    """Manually link an order line to a warehouse product by item number."""
+    line = WarehouseOrderLine.query.get_or_404(line_id)
+    if line.order_id != order_id:
+        abort(404)
+    item_number = (request.form.get('item_number') or '').strip()
+    line.item_number = item_number if item_number else None
+    db.session.commit()
+    flash('Item linked to inventory.' if item_number else 'Item link cleared.', 'success')
+    return redirect(url_for('billing.view_order', order_id=order_id))
+
+
+def _resolve_product(line, products_by_num, products_by_name):
+    """Return warehouse product for a line: prefer item_number, fall back to name."""
+    if line.item_number:
+        return products_by_num.get(line.item_number.strip().upper())
+    return products_by_name.get((line.item_name or '').strip().lower())
 
 
 @billing_bp.route('/warehouse/orders/<int:order_id>/invoice')
@@ -440,21 +462,22 @@ def order_invoice(order_id):
             order=order, trailer=trailer, line_items=line_items,
             total=total, is_billed=True, now=datetime.now)
 
-    # Pending: compute prices from warehouse (cost + 10% markup)
-    products_by_name = {(p.item_name or '').strip().lower(): p
-                        for p in WarehouseProduct.query.all() if p.item_name}
+    # Pending: compute prices — prefer linked item_number, fall back to name match
+    all_products = WarehouseProduct.query.order_by(WarehouseProduct.item_name).all()
+    products_by_num  = {p.item_number.strip().upper(): p for p in all_products}
+    products_by_name = {(p.item_name or '').strip().lower(): p for p in all_products if p.item_name}
 
     line_items = []
     total = 0.0
     for line in order.lines:
-        product = products_by_name.get((line.item_name or '').strip().lower())
+        product = _resolve_product(line, products_by_num, products_by_name)
         unit_price = round(product.unit_cost * 1.10, 2) if product else 0.0
         line_total = unit_price * line.quantity
         total += line_total
         line_items.append({
             'line_id': line.id,
             'item_name': line.item_name,
-            'item_number': product.item_number if product else None,
+            'item_number': product.item_number if product else line.item_number,
             'quantity': line.quantity,
             'unit_price': unit_price,
             'line_total': line_total,
@@ -476,8 +499,9 @@ def confirm_order_invoice(order_id):
         return redirect(url_for('billing.order_invoice', order_id=order_id))
 
     included_ids = set(int(x) for x in request.form.getlist('include_line'))
-    products_by_name = {(p.item_name or '').strip().lower(): p
-                        for p in WarehouseProduct.query.all() if p.item_name}
+    all_products = WarehouseProduct.query.all()
+    products_by_num  = {p.item_number.strip().upper(): p for p in all_products}
+    products_by_name = {(p.item_name or '').strip().lower(): p for p in all_products if p.item_name}
 
     is_purchase = (order.order_type == 'PURCHASE')
     order_total = 0.0
@@ -488,7 +512,7 @@ def confirm_order_invoice(order_id):
             line.unit_price = 0.0
             line.line_total = 0.0
             continue
-        product = products_by_name.get((line.item_name or '').strip().lower())
+        product = _resolve_product(line, products_by_num, products_by_name)
         if product:
             if is_purchase:
                 product.quantity_on_hand += line.quantity
