@@ -37,13 +37,69 @@ def logout():
 @billing_bp.route('/')
 @billing_required
 def billing_dashboard():
+    from models import Invoice as _Invoice
+    from sqlalchemy import func
+    from datetime import timedelta
+    from itertools import groupby
+
     q = (request.args.get('q') or '').strip().lower()
-    trailers = Trailer.query.filter(Trailer.status == 'Completed').order_by(Trailer.id.desc()).all()
+    trailers = Trailer.query.filter(Trailer.status == 'Completed').all()
+
     if q:
         trailers = [t for t in trailers if q in (t.job_name or '').lower()
-                     or q in (t.job_number or '').lower()
-                     or q in str(t.id)]
-    return render_template('billing_dashboard.html', trailers=trailers, q=q)
+                    or q in (t.job_number or '').lower()
+                    or q in str(t.id)]
+
+    # Latest invoice per trailer
+    invoice_map = {}
+    for inv in _Invoice.query.all():
+        if inv.trailer_id not in invoice_map or inv.id > invoice_map[inv.trailer_id].id:
+            invoice_map[inv.trailer_id] = inv
+
+    # Latest response date per trailer (used as "inventoried on" date)
+    date_rows = (db.session.query(
+        InventoryResponse.trailer_id,
+        func.max(InventoryResponse.created_at).label('last_date')
+    ).group_by(InventoryResponse.trailer_id).all())
+    date_map = {row.trailer_id: row.last_date for row in date_rows}
+
+    # Enrich each trailer
+    trailer_data = []
+    for t in trailers:
+        inv = invoice_map.get(t.id)
+        is_billed = bool(inv and inv.billed)
+        dt = date_map.get(t.id)
+        trailer_data.append({
+            'trailer': t,
+            'invoice': inv,
+            'is_billed': is_billed,
+            'date': dt,
+        })
+
+    # Sort: by date descending (undated last), then pending before billed within same date
+    trailer_data.sort(key=lambda x: (
+        x['date'] is None,
+        -(x['date'].timestamp() if x['date'] else 0),
+        x['is_billed'],
+    ))
+
+    # Group by week (Monday of each week as key)
+    def week_key(item):
+        if item['date'] is None:
+            return None
+        return (item['date'].date() - timedelta(days=item['date'].weekday()))
+
+    weeks = []
+    for wk, grp in groupby(trailer_data, key=week_key):
+        items = list(grp)
+        if wk is None:
+            label = 'Undated'
+        else:
+            sunday = wk + timedelta(days=6)
+            label = f"Week of {wk.strftime('%b %d')} \u2013 {sunday.strftime('%b %d, %Y')}"
+        weeks.append({'label': label, 'items': items})
+
+    return render_template('billing_dashboard.html', weeks=weeks, q=q)
 
 
 # ---------- Pricing Management ----------
@@ -362,36 +418,83 @@ def update_order_status(order_id):
     return redirect(url_for('billing.view_order', order_id=order_id))
 
 
-@billing_bp.route('/warehouse/orders/<int:order_id>/bill', methods=['POST'])
+@billing_bp.route('/warehouse/orders/<int:order_id>/invoice')
 @billing_required
-def mark_order_billed(order_id):
-    """Mark an order as billed: match items by name, deduct inventory, snapshot prices."""
+def order_invoice(order_id):
+    """Show an invoice preview for an order (or the locked invoice if already billed)."""
+    order = WarehouseOrder.query.get_or_404(order_id)
+    trailer = Trailer.query.get(order.trailer_id) if order.trailer_id else None
+
+    if order.billed:
+        line_items = [{
+            'line_id': line.id,
+            'item_name': line.item_name,
+            'item_number': line.item_number,
+            'quantity': line.quantity,
+            'unit_price': line.unit_price,
+            'line_total': line.line_total,
+            'matched': bool(line.item_number),
+        } for line in order.lines]
+        total = order.order_total or 0.0
+        return render_template('billing_order_invoice.html',
+            order=order, trailer=trailer, line_items=line_items,
+            total=total, is_billed=True, now=datetime.now)
+
+    # Pending: compute prices from warehouse (cost + 10% markup)
+    products_by_name = {(p.item_name or '').strip().lower(): p
+                        for p in WarehouseProduct.query.all() if p.item_name}
+
+    line_items = []
+    total = 0.0
+    for line in order.lines:
+        product = products_by_name.get((line.item_name or '').strip().lower())
+        unit_price = round(product.unit_cost * 1.10, 2) if product else 0.0
+        line_total = unit_price * line.quantity
+        total += line_total
+        line_items.append({
+            'line_id': line.id,
+            'item_name': line.item_name,
+            'item_number': product.item_number if product else None,
+            'quantity': line.quantity,
+            'unit_price': unit_price,
+            'line_total': line_total,
+            'matched': bool(product),
+        })
+
+    return render_template('billing_order_invoice.html',
+        order=order, trailer=trailer, line_items=line_items,
+        total=total, is_billed=False, now=datetime.now)
+
+
+@billing_bp.route('/warehouse/orders/<int:order_id>/invoice/confirm', methods=['POST'])
+@billing_required
+def confirm_order_invoice(order_id):
+    """Confirm & bill an order invoice: deduct stock, snapshot prices."""
     order = WarehouseOrder.query.get_or_404(order_id)
     if order.billed:
         flash('Order is already billed.', 'warning')
-        return redirect(url_for('billing.view_order', order_id=order_id))
+        return redirect(url_for('billing.order_invoice', order_id=order_id))
 
-    # Build lookup maps: name (lower) -> product, item_number (upper) -> price
+    included_ids = set(int(x) for x in request.form.getlist('include_line'))
     products_by_name = {(p.item_name or '').strip().lower(): p
                         for p in WarehouseProduct.query.all() if p.item_name}
-    price_map = {p.item_number.upper(): p.price for p in ItemPrice.query.all()}
 
+    is_purchase = (order.order_type == 'PURCHASE')
     order_total = 0.0
     unmatched = []
 
-    is_purchase = (order.order_type == 'PURCHASE')
-
     for line in order.lines:
-        name_key = (line.item_name or '').strip().lower()
-        product = products_by_name.get(name_key)
-
+        if line.id not in included_ids:
+            line.unit_price = 0.0
+            line.line_total = 0.0
+            continue
+        product = products_by_name.get((line.item_name or '').strip().lower())
         if product:
-            # SALE: remove from stock. PURCHASE: add to stock.
             if is_purchase:
                 product.quantity_on_hand += line.quantity
             else:
-                product.quantity_on_hand -= line.quantity
-            unit_price = price_map.get(product.item_number.upper(), product.unit_cost or 0.0)
+                product.quantity_on_hand = max(0, product.quantity_on_hand - line.quantity)
+            unit_price = round(product.unit_cost * 1.10, 2)
             line.unit_price = unit_price
             line.line_total = unit_price * line.quantity
             line.item_number = product.item_number
@@ -399,7 +502,6 @@ def mark_order_billed(order_id):
             line.unit_price = 0.0
             line.line_total = 0.0
             unmatched.append(line.item_name or '(unnamed)')
-
         order_total += line.line_total
 
     order.billed = True
@@ -407,13 +509,19 @@ def mark_order_billed(order_id):
     order.order_total = order_total
     db.session.commit()
 
-    action = 'received into' if is_purchase else 'deducted from'
     if unmatched:
-        flash(f'Order billed. {len(unmatched)} item(s) not matched in warehouse stock '
-              f'(inventory not updated): {", ".join(unmatched[:5])}.', 'warning')
+        flash(f'Order billed. {len(unmatched)} item(s) not found in warehouse stock '
+              f'(prices set to $0): {", ".join(unmatched[:5])}.', 'warning')
     else:
-        flash(f'Order billed. Total: ${order_total:,.2f}. Inventory {action} stock.', 'success')
-    return redirect(url_for('billing.view_order', order_id=order_id))
+        flash(f'Order billed. Total: ${order_total:,.2f}.', 'success')
+    return redirect(url_for('billing.order_invoice', order_id=order_id))
+
+
+@billing_bp.route('/warehouse/orders/<int:order_id>/bill', methods=['POST'])
+@billing_required
+def mark_order_billed(order_id):
+    """Legacy redirect — send to the invoice preview instead."""
+    return redirect(url_for('billing.order_invoice', order_id=order_id))
 
 
 # ---------- Tooling List Management ----------

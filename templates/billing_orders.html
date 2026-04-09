@@ -78,8 +78,13 @@
                 <span class="chip amber">Pending</span>
               {% endif %}
             </td>
-            <td>
+            <td style="display:flex;gap:6px;flex-wrap:wrap;">
               <a class="btn ghost small" href="{{ url_for('billing.view_order', order_id=order.id) }}">View</a>
+              {% if order.billed %}
+                <a class="btn ghost small" href="{{ url_for('billing.order_invoice', order_id=order.id) }}">Invoice</a>
+              {% elif order.status != 'Cancelled' %}
+                <a class="btn primary small" href="{{ url_for('billing.order_invoice', order_id=order.id) }}">Generate Invoice</a>
+              {% endif %}
             </td>
           </tr>
           {% else %}

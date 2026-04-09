@@ -25,19 +25,16 @@
       </h2>
     </div>
     <div class="actions-row">
-      {% if not order.billed %}
-      <!-- Mark as Billed -->
-      <form method="POST" action="{{ url_for('billing.mark_order_billed', order_id=order.id) }}"
-            onsubmit="return confirm('Mark this order as billed? This will deduct inventory and lock pricing.')">
-        <button class="btn primary small" type="submit">Mark as Billed</button>
-      </form>
-      <!-- Cancel -->
-      <form method="POST" action="{{ url_for('billing.update_order_status', order_id=order.id) }}"
-            style="display:inline;">
-        <input type="hidden" name="status" value="Cancelled">
-        <button class="btn ghost small" type="submit" style="color:#dc2626;"
-                onclick="return confirm('Cancel this order?')">Cancel Order</button>
-      </form>
+      {% if order.billed %}
+        <a class="btn ghost small" href="{{ url_for('billing.order_invoice', order_id=order.id) }}">View Invoice</a>
+      {% else %}
+        <a class="btn primary small" href="{{ url_for('billing.order_invoice', order_id=order.id) }}">Generate Invoice</a>
+        <form method="POST" action="{{ url_for('billing.update_order_status', order_id=order.id) }}"
+              style="display:inline;">
+          <input type="hidden" name="status" value="Cancelled">
+          <button class="btn ghost small" type="submit" style="color:#dc2626;"
+                  onclick="return confirm('Cancel this order?')">Cancel Order</button>
+        </form>
       {% endif %}
       <a class="btn ghost small" href="{{ url_for('billing.warehouse_orders') }}">Back</a>
     </div>
