@@ -97,7 +97,7 @@ def billing_dashboard():
         else:
             sunday = wk + timedelta(days=6)
             label = f"Week of {wk.strftime('%b %d')} \u2013 {sunday.strftime('%b %d, %Y')}"
-        weeks.append({'label': label, 'items': items})
+        weeks.append({'label': label, 'rows': items})
 
     return render_template('billing_dashboard.html', weeks=weeks, q=q)
 

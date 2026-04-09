@@ -33,8 +33,8 @@
     <div style="padding:10px 20px;background:#f1f5f9;border-top:1px solid var(--border);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;">
       <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);">{{ week.label }}</span>
       <span style="font-size:12px;color:var(--muted);">
-        {{ week.items | selectattr('is_billed', 'equalto', False) | list | length }} pending &nbsp;·&nbsp;
-        {{ week.items | selectattr('is_billed') | list | length }} billed
+        {{ week.rows | selectattr('is_billed', 'equalto', False) | list | length }} pending &nbsp;·&nbsp;
+        {{ week.rows | selectattr('is_billed') | list | length }} billed
       </span>
     </div>
 
@@ -51,7 +51,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for item in week.items %}
+          {% for item in week.rows %}
           {% set t = item.trailer %}
           <tr style="{% if item.is_billed %}opacity:.65;{% endif %}">
             <td style="font-weight:600;">{{ t.job_name or '—' }}</td>
